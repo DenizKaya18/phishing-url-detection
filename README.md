@@ -8,39 +8,39 @@ A robust, production-ready ensemble deep learning framework for detecting phishi
 
 ✨ Key Features
 
-Ensemble Learning
+- Ensemble Learning
 
-CNN–BiLSTM base model
+- CNN–BiLSTM base model
 
-Multi-scale CNN architecture
+- Multi-scale CNN architecture
 
-Attention-based neural model
+- Attention-based neural model
 
-Wide (high-capacity) architecture
+- Wide (high-capacity) architecture
 
-Feature Engineering
+- Feature Engineering
 
-Character-level URL tokenization
+- Character-level URL tokenization
 
-Vectorized numerical URL features
+- Vectorized numerical URL features
 
-Fold-isolated feature extraction (no data leakage)
+- Fold-isolated feature extraction (no data leakage)
 
-Evaluation & Validation
+- Evaluation & Validation
 
-Stratified K-fold cross-validation (default: 10-fold)
+- Stratified K-fold cross-validation (default: 10-fold)
 
-Accuracy, Precision, Recall, F1-score, AUC-ROC
+- Accuracy, Precision, Recall, F1-score, AUC-ROC
 
-Statistical significance testing (McNemar, t-test, Wilcoxon, ANOVA, Cohen’s d)
+- Statistical significance testing (McNemar, t-test, Wilcoxon, ANOVA, Cohen’s d)
 
-Research-Oriented Design
+- Research-Oriented Design
 
-Fully modular codebase
+- Fully modular codebase
 
-Deterministic training via fixed random seeds
+- Deterministic training via fixed random seeds
 
-Clear separation of data processing, modeling, and evaluation
+- Clear separation of data processing, modeling, and evaluation
 
 
 
