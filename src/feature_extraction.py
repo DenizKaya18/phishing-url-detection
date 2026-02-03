@@ -19,7 +19,7 @@ load()
 
 class VectorizedFeatureExtractor:
     """
-    Hızlı feature extraction (vectorized) - using SUM of token weights per URL
+    Feature extraction (vectorized) - using SUM of token weights per URL
     """
 
     def __init__(self, bow_data=None, seg_bow_data=None, ngrams_data=None,

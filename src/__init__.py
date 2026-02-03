@@ -6,7 +6,7 @@ featuring comprehensive feature engineering and statistical validation.
 """
 
 __version__ = "1.0.0"
-__author__ = "Your Name"
+__author__ = "Deniz Kaya"
 
 from .preprocessing import (
     prepare_data_from_raw,

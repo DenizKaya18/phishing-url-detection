@@ -18,7 +18,7 @@ from evaluation import evaluate_model, calculate_cv_statistics
 from statistical_tests import run_statistical_tests
 
 
-def main(data_file="data/Yeniyirmibin_dataset_V1.txt", 
+def main(data_file="data/dataset.txt", 
          test_size=0.2,
          n_folds=10,
          epochs=15,
