@@ -1,283 +1,333 @@
-<<<<<<< HEAD
-# Ensemble Deep Learning for URL Phishing Detection
+# URL Phishing Detection - Ensemble Deep Learning Framework
 
-A modular deep learning framework for detecting phishing URLs using ensemble of CNN-BiLSTM architectures with comprehensive feature engineering and statistical validation.
+![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
+![TensorFlow](https://img.shields.io/badge/TensorFlow-2.19.0-orange.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-## 📋 Table of Contents
+A robust, production-ready ensemble deep learning framework for detecting phishing URLs using advanced neural network architectures with comprehensive statistical validation.
 
-- [Overview](#overview)
-- [Features](#features)
-- [Project Structure](#project-structure)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Model Architectures](#model-architectures)
-- [Evaluation Metrics](#evaluation-metrics)
-- [Statistical Testing](#statistical-testing)
-- [Requirements](#requirements)
+✨ Key Features
 
-## 🎯 Overview
+Ensemble Learning
 
-This project implements an ensemble of four deep learning architectures for URL phishing detection:
+CNN–BiLSTM base model
 
-1. **Base Model**: CNN + Bidirectional LSTM with L2 regularization
-2. **Multi-CNN Model**: Multi-scale CNN with different kernel sizes
-3. **Attention Model**: Self-attention mechanism with CNN
-4. **Wide Model**: Increased capacity CNN-BiLSTM
+Multi-scale CNN architecture
 
-The models are trained using 10-fold cross-validation and combined via soft voting for final predictions.
+Attention-based neural model
 
-## ✨ Features
+Wide (high-capacity) architecture
 
-- **Modular Architecture**: Clean separation of preprocessing, modeling, and evaluation
-- **Ensemble Learning**: Combines 4 different architectures for robust predictions
-- **Cross-Validation**: 10-fold stratified CV for reliable performance estimates
-- **Feature Engineering**: 20 handcrafted features including:
-  - URL length and special character ratios
-  - TLD-based features with learned weights
-  - Bag-of-Words with segmentation
-  - Character n-grams (3-grams and 4-grams)
-  - Domain and path ratios
-- **Statistical Validation**: Comprehensive statistical tests including:
-  - McNemar's test for classifier comparison
-  - Paired t-test and Wilcoxon test
-  - ANOVA for multiple model comparison
-  - Cohen's d effect size calculations
-- **GPU Optimization**: Mixed precision training for faster computation
+Feature Engineering
 
-## 📁 Project Structure
+Character-level URL tokenization
 
-```
-.
-├── src/
-│   ├── preprocessing.py      # Data loading and preprocessing
-│   ├── model.py              # Model architectures
-│   ├── evaluation.py         # Metrics and visualization
-│   ├── statistical_tests.py  # Statistical significance tests
-│   └── main.py               # Main execution script
-├── data/
-│   └── Yeniyirmibin_dataset_V1.txt  # Dataset (not included)
-├── requirements.txt          # Python dependencies
-└── README.md                 # This file
-```
+Vectorized numerical URL features
+
+Fold-isolated feature extraction (no data leakage)
+
+Evaluation & Validation
+
+Stratified K-fold cross-validation (default: 10-fold)
+
+Accuracy, Precision, Recall, F1-score, AUC-ROC
+
+Statistical significance testing (McNemar, t-test, Wilcoxon, ANOVA, Cohen’s d)
+
+Research-Oriented Design
+
+Fully modular codebase
+
+Deterministic training via fixed random seeds
+
+Clear separation of data processing, modeling, and evaluation
+
+
 
 ## 🚀 Installation
 
 ### Prerequisites
 
-- Python 3.8+
-- CUDA-capable GPU (optional, but recommended)
+- Python 3.8 or higher
+- pip package manager
 
 ### Setup
 
 1. Clone the repository:
-```bash
-git clone <repository-url>
+```
+git clone https://github.com/DenizKaya18/phishing-url-detection.git
 cd url-phishing-detection
 ```
 
-2. Create virtual environment:
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+2. Install dependencies:
 ```
-
-3. Install dependencies:
-```bash
 pip install -r requirements.txt
 ```
 
-### GPU Setup (Optional)
+### Requirements
 
-For GPU acceleration with mixed precision:
-
-```bash
-pip install tensorflow-gpu>=2.10.0
+```
+tensorflow==2.19.0
+pandas==2.2.2
+numpy==2.0.2
+scikit-learn==1.6.1
+wordsegment==1.3.1
+tldextract==5.3.1
+matplotlib==3.10.0
+seaborn==0.13.2
+psutil==5.9.5
 ```
 
-Ensure you have:
-- CUDA Toolkit 11.2+
-- cuDNN 8.1+
-
-## 💻 Usage
+## ⚡ Quick Start
 
 ### Basic Usage
 
-```python
+```
 from preprocessing import prepare_data_from_raw
-from evaluation import evaluate_model
+from ensemble_classifier import OptimizedEnsembleURLClassifierCV
 
-# 1. Load and preprocess data
-X_train, X_test, y_train, y_test, tokenizer, max_len, vocab_size = \
-    prepare_data_from_raw("data/Yeniyirmibin_dataset_V1.txt")
+# Load dataset
+X_train, X_test, y_train, y_test, tokenizer, max_len, vocab = \
+    prepare_data_from_raw("data/dataset.txt")
 
-# 2. Train model (requires full implementation)
-# See original code for complete training pipeline
-
-# 3. Evaluate
-y_pred = model.predict(X_test)
-results = evaluate_model(y_test, y_pred, model_name="Ensemble")
-```
-
-### Running the Complete Pipeline
-
-```bash
-python src/main.py
-```
-
-### Feature Extraction Example
-
-The project uses isolated feature extraction for each fold:
-
-```python
-from feature_extraction import VectorizedFeatureExtractor
-
-extractor = VectorizedFeatureExtractor(
-    bow_data=bow_weights,
-    seg_bow_data=segmented_bow_weights,
-    ngrams_data=ngrams_weights,
-    grams4_data=grams4_weights,
-    tld_data=tld_weights
+# Initialize ensemble
+classifier = OptimizedEnsembleURLClassifierCV(
+    n_models=4,
+    n_folds=10,
+    random_seeds=[42, 123, 456, 789]
 )
 
-X_features, y_labels, processed_urls = extractor.extract_batch_vectorized(
-    urls, labels, batch_size=5000
+classifier.tokenizer = tokenizer
+classifier.max_len = max_len
+classifier.vocab_size = vocab
+
+# Cross-validation
+classifier.cross_validate_ensemble(X_train, y_train, epochs=15)
+
+# Final training
+classifier.train_final_ensemble(
+    X_train, y_train, X_test, y_test, epochs=15
+)
+
+```
+
+## 📁 Project Structure
+
+```
+url-phishing-detection/
+├── src/
+│   ├── __init__.py
+│   ├── preprocessing.py
+│   ├── model.py
+│   ├── ensemble_classifier.py
+│   ├── evaluation.py
+│   ├── statistical_tests.py
+│	├── feature_extraction.py
+│   └── main.py
+│
+├── data/
+│   ├── README.md        👈 dataset description and source
+│   └── raw/
+│       └── mendeley_urls.txt
+│
+├── results/  # Evaluation outputs (auto-generated)
+├── models/   # Saved models (auto-generated)
+├── requirements.txt
+├── README.md
+└── LICENSE
+
+```
+
+
+
+### Dataset
+
+This study uses a publicly available phishing URL dataset from Mendeley Data:
+
+Source: https://data.mendeley.com/datasets/vfszbj9b36/1
+
+Original labels: legitimate, phishing
+
+Encoded labels:
+
+0 → legitimate
+
+1 → phishing
+
+Label encoding was performed without altering class semantics or sample distribution.
+
+Further details are provided in data/README.md.
+
+
+
+### Training Pipeline
+
+The `main.py` script executes a complete training pipeline:
+
+1. **Data Preprocessing**: Load, tokenize, and split data
+2. **Cross-Validation**: Train and evaluate models using K-fold CV
+3. **Final Training**: Train ensemble on full training set
+4. **Statistical Testing**: Validate model performance significance
+5. **Results Summary**: Display comprehensive metrics
+
+### Custom Configuration
+
+```python
+classifier, stats = main(
+    data_file="data/dataset.txt",
+    test_size=0.2,          # Test set proportion
+    n_folds=10,             # Number of CV folds
+    epochs=15,              # Training epochs
+    batch_size=512          # Batch size
 )
 ```
 
 ## 🏗️ Model Architectures
 
-### 1. Base Model (CNN + BiLSTM)
-
-```
-Input (URL chars) → Embedding(64) → [CNN(64,3) + BiLSTM(32)] → Concat
-Input (Features) → Dense(32) → BN → Dropout(0.3) → Concat
-Merged → Dense(64) → BN → Dropout(0.4) → Dense(32) → BN → Dropout(0.3) → Output
-```
+### 1. Base Model (CNN-BiLSTM)
+- **Embedding**: 64-dimensional character embeddings
+- **CNN**: 64 filters, kernel size 3, L2 regularization
+- **BiLSTM**: 32 units per direction, dropout 0.3
+- **Dense**: Two layers (64→32 units) with batch normalization
 
 ### 2. Multi-CNN Model
-
-Multiple parallel CNN branches with different kernel sizes (3 and 5) for multi-scale feature extraction.
+- Multiple convolutional branches (kernel sizes: 3, 5)
+- Parallel feature extraction at different scales
+- BiLSTM for sequence modeling
+- Feature concatenation and fusion
 
 ### 3. Attention Model
-
-Self-attention mechanism to focus on important URL segments.
+- Custom attention mechanism for character importance
+- CNN for local pattern detection
+- Attention-weighted feature aggregation
+- Dense classification layers
 
 ### 4. Wide Model
+- Increased capacity (64 CNN filters, 64 BiLSTM units)
+- Enhanced feature representation
+- Suitable for complex pattern recognition
+- Balanced regularization
 
-Increased network capacity with wider layers (64 filters, 64 LSTM units).
+## 🔍 Feature Extraction
+
+- Character-level URL sequences (deep models)
+
+- Vectorized numerical features (URL structure-based)
+
+- Fold-isolated feature computation to prevent information leakage
+
+- Standardized scaling applied only on training folds
 
 ## 📊 Evaluation Metrics
 
-The framework calculates comprehensive metrics:
+The framework computes comprehensive metrics:
 
-- **Classification Metrics**:
-  - Accuracy
-  - Precision
-  - Recall (Sensitivity)
-  - F1-Score
-  - Specificity
-  - False Positive Rate (FPR)
-  - False Negative Rate (FNR)
+- **Accuracy**: Overall classification accuracy
+- **Precision**: Positive predictive value
+- **Recall (Sensitivity)**: True positive rate
+- **F1-Score**: Harmonic mean of precision and recall
+- **Specificity**: True negative rate
+- **FPR**: False positive rate
+- **FNR**: False negative rate
+- **AUC-ROC**: Area under the ROC curve
+- **Confusion Matrix**: Detailed classification breakdown
 
-- **Confusion Matrix**: Detailed breakdown of predictions
 
-- **ROC Curve**: With AUC score
 
-- **Cross-Validation Statistics**: Mean, std, min, max across folds
-
-## 📈 Statistical Testing
+## 📈 Statistical Tests
 
 ### Implemented Tests
 
 1. **McNemar's Test**
-   - Compares two classifiers on the same test set
-   - Tests if disagreements are significantly different
+   - Compares paired predictions
+   - Tests for significant differences between models
 
-2. **Paired t-test**
-   - Compares mean performance across CV folds
-   - Assumes normal distribution
+2. **Paired t-Test**
+   - Compares mean performance across folds
+   - Parametric test for normally distributed data
 
 3. **Wilcoxon Signed-Rank Test**
    - Non-parametric alternative to t-test
-   - More robust to outliers
+   - Robust to non-normal distributions
 
-4. **One-way ANOVA**
-   - Compares multiple models simultaneously
-   - Tests if at least one model differs significantly
 
-5. **Cohen's d Effect Size**
-   - Quantifies magnitude of difference
-   - Interpretations: negligible (<0.2), small (0.2-0.5), medium (0.5-0.8), large (>0.8)
 
 ### Running Statistical Tests
 
 ```python
 from statistical_tests import run_statistical_tests
 
-# After training with cross-validation
+# After training ensemble
 statistical_results = run_statistical_tests(classifier)
 ```
 
-## 📦 Requirements
+## ⚙️ Configuration
 
-### Core Dependencies
+### Model Hyperparameters
 
-- `tensorflow>=2.10.0` - Deep learning framework
-- `numpy>=1.21.0` - Numerical computing
-- `pandas>=1.3.0` - Data manipulation
-- `scikit-learn>=1.0.0` - ML utilities and metrics
-- `scipy>=1.7.0` - Statistical functions
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `n_models` | 4 | Number of models in ensemble |
+| `n_folds` | 10 | Cross-validation folds |
+| `epochs` | 15 | Training epochs per model |
+| `batch_size` | 512 | Training batch size |
+| `learning_rate` | 0.008 | Adam optimizer learning rate |
+| `max_len` | Auto (95%ile) | Maximum sequence length |
+| `embedding_dim` | 64 | Character embedding dimension |
 
-### Visualization
+### Training Options
 
-- `matplotlib>=3.4.0` - Plotting
-- `seaborn>=0.11.0` - Statistical visualizations
+```python
+# Enable mixed precision training (automatic)
+# Supports GPU acceleration
+# Dynamic loss scaling for numerical stability
 
-### Feature Engineering
+# Callbacks (built-in):
+# - EarlyStopping (patience=5)
+# - ReduceLROnPlateau (patience=3)
+```
 
-- `tldextract>=3.1.0` - TLD extraction
-- `wordsegment>=0.2.0` - Word segmentation
+### Output Example
 
-See `requirements.txt` for complete list.
+```
+════════════════════════════════════════════════════════════════════════════════
+                    URL PHISHING DETECTION - ENSEMBLE DEEP LEARNING                    
+════════════════════════════════════════════════════════════════════════════════
 
-## 🎓 Citation
+📂 STEP 1: Data Preprocessing
+────────────────────────────────────────────────────────────────────────────────
+✓ Data loaded successfully
+  Vocabulary size: 98
+  Max sequence length: 167
+  Training samples: 8000
+  Test samples: 2000
 
-If you use this code in your research, please cite:
+🔬 STEP 2: Initialize Ensemble Classifier
+────────────────────────────────────────────────────────────────────────────────
 
-```bibtex
-@article{url_phishing_detection_2024,
-  title={Ensemble Deep Learning for URL Phishing Detection with Statistical Validation},
-  author={Your Name},
-  year={2024}
-}
+📊 STEP 3: Cross-Validation Training
+────────────────────────────────────────────────────────────────────────────────
+
+📈 Cross-Validation Results:
+────────────────────────────────────────────────────────────────────────────────
+  base        : 0.9650 (± 0.0089)
+  multi_cnn   : 0.9625 (± 0.0095)
+  attention   : 0.9638 (± 0.0092)
+  wide        : 0.9668 (± 0.0085)
+  Ensemble    : 0.9725 (± 0.0078)
+
+✅ TRAINING COMPLETED SUCCESSFULLY
+════════════════════════════════════════════════════════════════════════════════
 ```
 
 ## 📝 License
 
-[Add your license here]
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🤝 Contributing
+## 👤 Author
 
-Contributions are welcome! Please:
+**Deniz Kaya**
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
 
-## 📧 Contact
 
-[Add contact information]
 
-## 🙏 Acknowledgments
-
-- Dataset: Yeniyirmibin_dataset_V1
-- Inspired by research in phishing detection and ensemble learning
-
----
-
-**Note**: This is a modularized version of the original Colab notebook. The complete feature extraction pipeline and training loop require additional components from the original implementation.
-=======
-# phishing-url-detection
-Source code for the paper: A Feature-Enriched Deep Learning Based Ensemble Framework for Robust Phishing URL Detection
->>>>>>> dc226492a83f3b58895dacc2a89b510a356a1579
