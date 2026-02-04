@@ -32,7 +32,7 @@ A robust, production-ready ensemble deep learning framework for detecting phishi
 
 - Accuracy, Precision, Recall, F1-score, AUC-ROC
 
-- Statistical significance testing (McNemar, t-test, Wilcoxon, ANOVA, Cohen’s d)
+- Statistical significance testing (McNemar, t-test, Wilcoxon)
 
 - Research-Oriented Design
 
@@ -53,60 +53,75 @@ A robust, production-ready ensemble deep learning framework for detecting phishi
 
 ### Setup
 
-1. Clone the repository:
-```
-git clone https://github.com/DenizKaya18/phishing-url-detection.git
-cd url-phishing-detection
-```
+1.  **Clone the repository:**
+    ```bash
+    git clone [https://github.com/DenizKaya18/phishing-url-detection.git](https://github.com/DenizKaya18/phishing-url-detection.git)
+    cd url-phishing-detection
+    ```
 
-2. Install dependencies:
-```
-pip install -r requirements.txt
-```
+2.  **Create and activate a virtual environment (Optional but recommended):**
+    ```bash
+    # Windows
+    python -m venv venv
+    .\venv\Scripts\activate
 
-### Requirements
+    # Linux/Mac
+    python3 -m venv venv
+    source venv/bin/activate
+    ```
 
-```
-tensorflow==2.19.0
-pandas==2.2.2
-numpy==2.0.2
-scikit-learn==1.6.1
-wordsegment==1.3.1
-tldextract==5.3.1
-matplotlib==3.10.0
-seaborn==0.13.2
-psutil==5.9.5
-```
+3.  **Install dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+
 
 ## ⚡ Quick Start
 
-### Basic Usage
+Running the Full Pipeline
+
+To run the complete pipeline (Preprocessing → Cross-Validation → Final Training → Evaluation) with GPU optimization:
+
+python -m src.main
+
+### Programmatic Usage
+
+You can import modules to run specific parts of the pipeline manually:
 
 ```
-from preprocessing import prepare_data_from_raw
-from ensemble_classifier import OptimizedEnsembleURLClassifierCV
+from src.preprocessing import prepare_data_from_raw
+from src.ensemble_classifier import OptimizedEnsembleURLClassifierCV
 
-# Load dataset
-X_train, X_test, y_train, y_test, tokenizer, max_len, vocab = \
-    prepare_data_from_raw("data/dataset.txt")
+# 1. Load and Prepare Data
+# Note: prepare_data_from_raw returns 8 values
+(X_url_train, y_train, X_url_test, y_test, rows_all, 
+ tokenizer, max_len, vocab_size) = prepare_data_from_raw("data/dataset.txt", test_size=0.2)
 
-# Initialize ensemble
+# Create row tuples required for feature extraction
+rows_train = [(X_url_train[i], y_train[i]) for i in range(len(X_url_train))]
+rows_test = [(X_url_test[i], y_test[i]) for i in range(len(X_url_test))]
+
+# 2. Initialize Ensemble
 classifier = OptimizedEnsembleURLClassifierCV(
     n_models=4,
     n_folds=10,
     random_seeds=[42, 123, 456, 789]
 )
 
-classifier.tokenizer = tokenizer
-classifier.max_len = max_len
-classifier.vocab_size = vocab
+# 3. Cross-Validation
+# Supports checkpointing and detailed metrics
+classifier.cross_validate_ensemble(
+    X_url_train, y_train, rows_train,
+    epochs=15,
+    batch_size=512
+)
 
-# Cross-validation
-classifier.cross_validate_ensemble(X_train, y_train, epochs=15)
-
-# Final training
+# 4. Final Training on Training Split
 classifier.train_final_ensemble(
-    X_train, y_train, X_test, y_test, epochs=15
+    X_url_train, y_train, rows_train,
+    X_url_test, y_test, rows_test,
+    epochs=15,
+    batch_size=512
 )
 
 ```
@@ -127,18 +142,16 @@ url-phishing-detection/
 │
 ├── data/
 │   ├── README.md        👈 dataset description and source
-│   └── raw/
-│       └── mendeley_urls.txt
+│   └── dataset.txt
+│       
 │
-├── results/  # Evaluation outputs (auto-generated)
-├── models/   # Saved models (auto-generated)
+├── cv_checkpoints/    # Auto-saved CV states
+├── models/   		   # Saved models (auto-generated)
 ├── requirements.txt
 ├── README.md
 └── LICENSE
 
 ```
-
-
 
 ### Dataset
 
@@ -158,29 +171,6 @@ Label encoding was performed without altering class semantics or sample distribu
 
 Further details are provided in data/README.md.
 
-
-
-### Training Pipeline
-
-The `main.py` script executes a complete training pipeline:
-
-1. **Data Preprocessing**: Load, tokenize, and split data
-2. **Cross-Validation**: Train and evaluate models using K-fold CV
-3. **Final Training**: Train ensemble on full training set
-4. **Statistical Testing**: Validate model performance significance
-5. **Results Summary**: Display comprehensive metrics
-
-### Custom Configuration
-
-```python
-classifier, stats = main(
-    data_file="data/dataset.txt",
-    test_size=0.2,          # Test set proportion
-    n_folds=10,             # Number of CV folds
-    epochs=15,              # Training epochs
-    batch_size=512          # Batch size
-)
-```
 
 ## 🏗️ Model Architectures
 
@@ -218,21 +208,6 @@ classifier, stats = main(
 
 - Standardized scaling applied only on training folds
 
-## 📊 Evaluation Metrics
-
-The framework computes comprehensive metrics:
-
-- **Accuracy**: Overall classification accuracy
-- **Precision**: Positive predictive value
-- **Recall (Sensitivity)**: True positive rate
-- **F1-Score**: Harmonic mean of precision and recall
-- **Specificity**: True negative rate
-- **FPR**: False positive rate
-- **FNR**: False negative rate
-- **AUC-ROC**: Area under the ROC curve
-- **Confusion Matrix**: Detailed classification breakdown
-
-
 
 ## 📈 Statistical Tests
 
@@ -251,16 +226,6 @@ The framework computes comprehensive metrics:
    - Robust to non-normal distributions
 
 
-
-### Running Statistical Tests
-
-```python
-from statistical_tests import run_statistical_tests
-
-# After training ensemble
-statistical_results = run_statistical_tests(classifier)
-```
-
 ## ⚙️ Configuration
 
 ### Model Hyperparameters
@@ -272,61 +237,24 @@ statistical_results = run_statistical_tests(classifier)
 | `epochs` | 15 | Training epochs per model |
 | `batch_size` | 512 | Training batch size |
 | `learning_rate` | 0.008 | Adam optimizer learning rate |
-| `max_len` | Auto (95%ile) | Maximum sequence length |
 | `embedding_dim` | 64 | Character embedding dimension |
 
-### Training Options
+### 🚀 Training Optimizations
 
-```python
-# Enable mixed precision training (automatic)
-# Supports GPU acceleration
-# Dynamic loss scaling for numerical stability
+The framework automatically handles advanced training configurations:
 
-# Callbacks (built-in):
-# - EarlyStopping (patience=5)
-# - ReduceLROnPlateau (patience=3)
-```
+* **Mixed Precision Training:** Uses `mixed_float16` policy for faster training and lower memory usage on supported GPUs.
+* **Dynamic Loss Scaling:** Ensures numerical stability during half-precision training.
+* **Built-in Callbacks:**
+    * `EarlyStopping`: Monitors validation loss (patience=5) to prevent overfitting.
+    * `ReduceLROnPlateau`: Reduces learning rate (factor=0.3, patience=2) when convergence stalls.
 
-### Output Example
-
-```
-════════════════════════════════════════════════════════════════════════════════
-                    URL PHISHING DETECTION - ENSEMBLE DEEP LEARNING                    
-════════════════════════════════════════════════════════════════════════════════
-
-📂 STEP 1: Data Preprocessing
-────────────────────────────────────────────────────────────────────────────────
-✓ Data loaded successfully
-  Vocabulary size: 98
-  Max sequence length: 167
-  Training samples: 8000
-  Test samples: 2000
-
-🔬 STEP 2: Initialize Ensemble Classifier
-────────────────────────────────────────────────────────────────────────────────
-
-📊 STEP 3: Cross-Validation Training
-────────────────────────────────────────────────────────────────────────────────
-
-📈 Cross-Validation Results:
-────────────────────────────────────────────────────────────────────────────────
-  base        : 0.9650 (± 0.0089)
-  multi_cnn   : 0.9625 (± 0.0095)
-  attention   : 0.9638 (± 0.0092)
-  wide        : 0.9668 (± 0.0085)
-  Ensemble    : 0.9725 (± 0.0078)
-
-✅ TRAINING COMPLETED SUCCESSFULLY
-════════════════════════════════════════════════════════════════════════════════
-```
 
 ## 📝 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 👤 Author
 
-**Deniz Kaya**
 
 
 
