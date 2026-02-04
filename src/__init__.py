@@ -29,11 +29,7 @@ from .evaluation import (
 )
 
 from .statistical_tests import (
-    mcnemar_test,
-    paired_t_test,
-    wilcoxon_test,
-    anova_test,
-    cohens_d,
+    StatisticalSignificanceAnalyzer,
     run_statistical_tests
 )
 
@@ -66,11 +62,7 @@ __all__ = [
     'compare_models',
     
     # Statistical Tests
-    'mcnemar_test',
-    'paired_t_test',
-    'wilcoxon_test',
-    'anova_test',
-    'cohens_d',
+    'StatisticalSignificanceAnalyzer',
     'run_statistical_tests',
     
     # Feature Extraction

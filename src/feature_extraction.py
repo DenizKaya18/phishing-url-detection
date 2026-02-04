@@ -1,6 +1,6 @@
 """
-Feature extraction module for URL phishing detection.
-Handles vectorized feature extraction including BoW, TLD, n-grams, and more.
+Feature extraction module matching Colab optimization.
+Uses RAM-based caching and parallel execution.
 """
 
 import numpy as np
@@ -9,31 +9,22 @@ import tldextract
 from urllib.parse import urlparse
 from collections import Counter
 from functools import lru_cache
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 from wordsegment import load, segment
+import time
 
 # Load word segmentation data
 load()
 
-
 class VectorizedFeatureExtractor:
     """
     Feature extraction (vectorized) - using SUM of token weights per URL
+    Matches Colab implementation exactly.
     """
 
     def __init__(self, bow_data=None, seg_bow_data=None, ngrams_data=None,
                  grams4_data=None, tld_data=None):
-        """
-        Initialize feature extractor with pre-computed weights.
-        
-        Args:
-            bow_data: Dictionary of {token: weight} for bag-of-words
-            seg_bow_data: Dictionary for segmented bag-of-words
-            ngrams_data: Dictionary for 3-grams
-            grams4_data: Dictionary for 4-grams
-            tld_data: Dictionary for TLD weights
-        """
         self.bow_data = bow_data or {}
         self.seg_bow_data = seg_bow_data or {}
         self.ngrams_data = ngrams_data or {}
@@ -43,7 +34,6 @@ class VectorizedFeatureExtractor:
     @staticmethod
     @lru_cache(maxsize=10000)
     def _extract_tld(url):
-        """Extract TLD from URL with caching."""
         try:
             extracted = tldextract.extract(url)
             return extracted.suffix or ""
@@ -52,51 +42,33 @@ class VectorizedFeatureExtractor:
 
     @staticmethod
     def _has_ip(url):
-        """Check if URL contains IP address."""
         return bool(re.match(r'.*\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b.*', url))
 
     @staticmethod
     def _has_tinyurl(url):
-        """Check if URL uses URL shortener."""
         return 'bit.ly' in url or 'tinyurl.com' in url
 
     @staticmethod
     def _tokenize(url):
-        """Tokenize URL into word characters."""
         return re.findall(r'\w+', url)
 
     @staticmethod
     def _make_ngrams_from_string(s, n=3):
-        """Generate character n-grams from string."""
         if not s or len(s) < n:
             return []
         return [s[i:i+n] for i in range(len(s)-n+1)]
 
     def _segment_token_safe(self, token):
-        """Safely segment token into sub-words."""
         try:
             segmented = segment(token)
             if segmented and isinstance(segmented, (list, tuple)):
                 return segmented
         except Exception:
             pass
-        # Fallback: split on non-alpha boundaries
         parts = re.findall(r'[A-Za-z]{3,}|[0-9]+', token)
         return parts if parts else [token]
 
     def _process_batch_vectorized(self, urls, labels):
-        """
-        Process batch of URLs and extract features.
-        
-        Args:
-            urls: List of URL strings
-            labels: List of labels (0 or 1)
-        
-        Returns:
-            X_features: Feature matrix (N x 20)
-            y_labels: Labels array
-            processed_urls: List of successfully processed URLs
-        """
         batch_features = []
         batch_labels = []
         processed_urls = []
@@ -107,16 +79,13 @@ class VectorizedFeatureExtractor:
                 special_chars = sum(1 for c in url if not c.isalnum())
                 url_len_ratio = special_chars / max(url_len, 1)
 
-                # TLD weight
                 tld = self._extract_tld(url)
                 tld_weight = float(self.tld_data.get(tld, 0.0))
 
-                # Parse URL
                 parsed = urlparse(url)
                 netloc = parsed.netloc or ""
                 subdomain_count = netloc.count('.')
 
-                # Path and domain ratios
                 path = parsed.path or ""
                 path_length = len(path)
 
@@ -127,7 +96,6 @@ class VectorizedFeatureExtractor:
                 path_ratio = path_length / max(url_len, 1)
                 domain_ratio = domain_length / max(url_len, 1)
 
-                # Tokenize
                 tokens = self._tokenize(url)
 
                 # BoW weighted SUM
@@ -141,61 +109,54 @@ class VectorizedFeatureExtractor:
 
                 # Segmented BoW weighted SUM
                 seg_bow_sum = 0.0
-                seg_match_count = 0
                 for t in tokens:
                     parts = self._segment_token_safe(t)
                     for p in parts:
                         w = float(self.seg_bow_data.get(p, 0.0))
                         if w > 0:
                             seg_bow_sum += w
-                            seg_match_count += 1
 
                 # N-grams (3-grams) weighted SUM
                 ngrams_sum = 0.0
-                ngrams_match_count = 0
                 for t in tokens:
                     ngrams = self._make_ngrams_from_string(t, n=3)
                     for ng in ngrams:
                         w = float(self.ngrams_data.get(ng, 0.0))
                         if w > 0:
                             ngrams_sum += w
-                            ngrams_match_count += 1
 
                 # 4-grams weighted SUM
                 grams4_sum = 0.0
-                grams4_match_count = 0
                 for t in tokens:
                     grams4 = self._make_ngrams_from_string(t, n=4)
                     for g4 in grams4:
                         w = float(self.grams4_data.get(g4, 0.0))
                         if w > 0:
                             grams4_sum += w
-                            grams4_match_count += 1
 
                 bag_of_words_count = float(bow_match_count)
 
-                # Create feature vector (20 features)
                 features = [
-                    float(url_len),                      # 0: URL_Length
-                    float(special_chars),                # 1: Special_Character_Count
-                    float(url_len_ratio),                # 2: URL_Length_Ratio
-                    tld_weight,                          # 3: TLD (weighted)
-                    1.0 if self._has_ip(url) else 0.0,   # 4: IP_Address_Usage
-                    1.0 if self._has_tinyurl(url) else 0.0, # 5: Tiny_URL
-                    1.0 if '@' in url else 0.0,          # 6: At_Symbol
-                    1.0 if url.count('//') > 1 else 0.0, # 7: URL_Redirection
-                    1.0 if '-' in netloc or (netloc.split('.')[0] if netloc else '').find('-')>=0 else 0.0, # 8: Hyphen
-                    1.0 if subdomain_count > 1 else 0.0, # 9: Subdomain
-                    1.0 if parsed.port and parsed.port not in [80, 443] else 0.0, # 10: Port
-                    1.0 if 'https-' in url else 0.0,     # 11: HTTPS_Domain
-                    1.0 if any(ext in url for ext in ['.exe', '.pdf', '.zip', '.rar']) else 0.0, # 12: File_Extension
-                    bag_of_words_count,                  # 13: Bag_of_Words_Count
-                    bow_sum,                             # 14: Weighted_BoW
-                    seg_bow_sum,                         # 15: Weighted_Segmented_BoW
-                    ngrams_sum,                          # 16: Weighted_3grams
-                    grams4_sum,                          # 17: Weighted_4grams
-                    float(path_ratio),                   # 18: path_ratio
-                    float(domain_ratio),                 # 19: domain_ratio
+                    float(url_len),                      # 0
+                    float(special_chars),                # 1
+                    float(url_len_ratio),                # 2
+                    tld_weight,                          # 3
+                    1.0 if self._has_ip(url) else 0.0,   # 4
+                    1.0 if self._has_tinyurl(url) else 0.0, # 5
+                    1.0 if '@' in url else 0.0,          # 6
+                    1.0 if url.count('//') > 1 else 0.0, # 7
+                    1.0 if '-' in netloc or (netloc.split('.')[0] if netloc else '').find('-')>=0 else 0.0, # 8
+                    1.0 if subdomain_count > 1 else 0.0, # 9
+                    1.0 if parsed.port and parsed.port not in [80, 443] else 0.0, # 10
+                    1.0 if 'https-' in url else 0.0,     # 11
+                    1.0 if any(ext in url for ext in ['.exe', '.pdf', '.zip', '.rar']) else 0.0, # 12
+                    bag_of_words_count,                  # 13
+                    bow_sum,                             # 14
+                    seg_bow_sum,                         # 15
+                    ngrams_sum,                          # 16
+                    grams4_sum,                          # 17
+                    float(path_ratio),                   # 18
+                    float(domain_ratio),                 # 19
                 ]
 
                 batch_features.append(features)
@@ -203,7 +164,6 @@ class VectorizedFeatureExtractor:
                 processed_urls.append(url)
 
             except Exception:
-                # Skip problematic URLs
                 continue
 
         if not batch_features:
@@ -212,19 +172,6 @@ class VectorizedFeatureExtractor:
         return np.array(batch_features, dtype=float), np.array(batch_labels, dtype=int), processed_urls
 
     def extract_batch_vectorized(self, urls, labels, batch_size=5000):
-        """
-        Extract features for batch of URLs with progress tracking.
-        
-        Args:
-            urls: Array of URLs
-            labels: Array of labels
-            batch_size: Processing batch size
-        
-        Returns:
-            X: Feature matrix
-            y: Labels
-            processed_urls: Successfully processed URLs
-        """
         all_feats = []
         all_labels = []
         all_urls = []
@@ -250,32 +197,24 @@ class VectorizedFeatureExtractor:
 
 class IsolatedFeatureManager:
     """
-    Manages isolated feature caches for each fold/split to prevent data leakage.
+    Manages isolated feature caches using RAM-based parallel processing.
+    Matches Colab's ThreadPoolExecutor implementation.
     """
 
     def __init__(self):
-        """Initialize feature manager."""
         self.feature_caches = {}
-        print("✓ Isolated Feature Manager initialized")
+        # Adjust workers based on Colab script logic
+        from multiprocessing import cpu_count
+        self.workers = min(8, cpu_count())
+        print(f"✓ Isolated Feature Manager initialized (Workers: {self.workers})")
 
     def create_features_for_data(self, url_label_list, cache_name):
-        """
-        Create features for a specific dataset in parallel.
-        
-        Args:
-            url_label_list: List of (url, label) tuples
-            cache_name: Name for this cache (e.g., "fold_1_train")
-        
-        Returns:
-            Dictionary with feature caches
-        """
-        print(f"\n[ISOLATED FEATURES] Creating parallel features for: {cache_name}")
+        print(f"\n[ISOLATED FEATURES] Creating PARALLEL features for: {cache_name}")
 
         cache = {
             'bow': {}, 'seg_bow': {}, 'ngrams': {}, 'grams4': {}, 'tld': {}
         }
 
-        # Create all features in parallel
         with ThreadPoolExecutor(max_workers=5) as executor:
             futures = {
                 'bow': executor.submit(self._create_bow_isolated, url_label_list, cache['bow']),
@@ -285,7 +224,6 @@ class IsolatedFeatureManager:
                 'tld': executor.submit(self._create_tld_isolated, url_label_list, cache['tld'])
             }
 
-            # Progress bar
             progress_bar = tqdm(
                 total=len(futures),
                 desc=f"  {cache_name:12}",
@@ -294,8 +232,6 @@ class IsolatedFeatureManager:
                 unit=' feature'
             )
 
-            # Wait for all to complete
-            from concurrent.futures import as_completed
             for future in as_completed(futures.values()):
                 future.result()
                 progress_bar.update(1)
@@ -307,7 +243,6 @@ class IsolatedFeatureManager:
         return cache
 
     def _create_bow_isolated(self, url_label_list, target_cache):
-        """Create isolated Bag-of-Words features."""
         malicious_tokens = []
         for url, label in url_label_list:
             if label == 1:
@@ -327,7 +262,6 @@ class IsolatedFeatureManager:
         })
 
     def _create_seg_bow_isolated(self, url_label_list, target_cache):
-        """Create isolated Segmented BoW features."""
         all_tokens = []
         for url, label in url_label_list:
             if label == 1:
@@ -355,7 +289,6 @@ class IsolatedFeatureManager:
         })
 
     def _create_ngrams_isolated(self, url_label_list, n, target_cache):
-        """Create isolated n-gram features."""
         all_tokens = []
         for url, label in url_label_list:
             if label == 1:
@@ -381,7 +314,6 @@ class IsolatedFeatureManager:
         })
 
     def _create_tld_isolated(self, url_label_list, target_cache):
-        """Create isolated TLD weight features."""
         tld_list = []
         for url, label in url_label_list:
             if label == 1:
@@ -404,17 +336,7 @@ class IsolatedFeatureManager:
         })
 
     def get_cache(self, cache_name):
-        """
-        Get cached features by name.
-        
-        Args:
-            cache_name: Name of the cache
-        
-        Returns:
-            Dictionary with feature caches
-        """
         return self.feature_caches.get(cache_name, {})
-
 
 def extract_features_for_fold_optimized(urls, labels, is_train=True,
                                        batch_size=5000,
@@ -422,26 +344,11 @@ def extract_features_for_fold_optimized(urls, labels, is_train=True,
                                        ngrams_data=None, grams4_data=None,
                                        tld_data=None):
     """
-    Optimized feature extraction for a fold.
-    
-    Args:
-        urls: Array of URLs
-        labels: Array of labels
-        is_train: Whether this is training data (for logging)
-        batch_size: Batch size for processing
-        bow_data: BoW weights dictionary
-        seg_bow_data: Segmented BoW weights
-        ngrams_data: 3-grams weights
-        grams4_data: 4-grams weights
-        tld_data: TLD weights
-    
-    Returns:
-        X_features: Feature matrix
-        y_labels: Labels
-        processed_urls: Successfully processed URLs
+    Optimized feature extraction wrapper used by ensemble classifier.
     """
     print(f"\n[EXTRACT] Extracting features...")
     prefix = "Train" if is_train else "Val"
+    start_time = time.time()
 
     extractor = VectorizedFeatureExtractor(
         bow_data=bow_data or {},
@@ -455,7 +362,9 @@ def extract_features_for_fold_optimized(urls, labels, is_train=True,
         urls, labels, batch_size=batch_size
     )
 
+    elapsed = time.time() - start_time
     print(f"✓ {prefix} Features extracted")
     print(f"  Samples: {len(X_features)}")
-
+    print(f"  Time: {elapsed:.1f} seconds")
+    
     return X_features, y_labels, processed_urls
