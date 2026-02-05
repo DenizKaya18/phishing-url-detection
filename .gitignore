@@ -1,6 +1,7 @@
 # Ignore trained models and checkpoints
 models/*
 cv_checkpoints/*
+src_classical_ml/results/*
 
 # Keep directories in repo
 !models/.gitkeep
@@ -9,11 +10,15 @@ cv_checkpoints/*
 # Python cache
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 
 # Virtual environments
 venv/
 .env/
+.env*/
 
 # IDE files
 .vscode/
 .idea/
+.DS_Store

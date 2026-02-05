@@ -1,3 +1,76 @@
+## 🧠 Machine Learning vs Deep Learning Baselines
+
+This repository contains **two complementary pipelines** evaluated on the **same phishing URL dataset**:
+
+### 🔹 Deep Learning Ensemble (Primary Contribution)
+- CNN–BiLSTM based architectures
+- Attention mechanisms
+- Multi-model ensemble with cross-validation
+- Located under: `src/`
+
+### 🔹 Classical Machine Learning Baselines
+To provide a fair and reproducible comparison, we also include a **comprehensive classical ML pipeline** featuring:
+
+- KNN, Random Forest, Gradient Boosting, Naive Bayes, MLP
+- 10-fold stratified cross-validation
+- Checkpointing and resume support
+- Statistical significance testing
+
+📁 **Location:** [`src_classical_ml/`](src_classical_ml/)  
+📄 **Documentation:** [`src_classical_ml/README.md`](src_classical_ml/README.md)
+
+Both pipelines:
+- Use the **same dataset**
+- Report identical evaluation metrics
+- Enable direct and fair performance comparison
+
+
+## 📁 Project Structure
+
+```
+url-phishing-detection/
+├── src/                               # Deep Learning pipeline
+│   ├── __init__.py
+│   ├── preprocessing.py               # URL cleaning and tokenization
+│   ├── feature_extraction.py          # Deep learning feature preparation
+│   ├── model.py                       # CNN / LSTM model definitions
+│   ├── ensemble_classifier.py         # Ensemble learning logic
+│   ├── evaluation.py                  # Performance evaluation metrics
+│   ├── statistical_tests.py           # Statistical significance testing
+│   └── main.py                        # Entry point for DL experiments
+│
+├── src_classical_ml/                  # Classical Machine Learning pipeline
+│   ├── __init__.py                    # Package initialization
+│   ├── config.py                      # Global configuration and parameters
+│   ├── data_loader.py                 # Dataset loading utilities
+│   ├── preprocessor.py                # URL preprocessing and normalization
+│   ├── feature_builder.py             # Handcrafted feature extraction
+│   ├── models.py                      # ML model definitions (RF, KNN, MLP, etc.)
+│   ├── trainer.py                     # Training and cross-validation pipeline
+│   ├── evaluator.py                   # Model evaluation and metric computation
+│   ├── checkpoint.py                  # Checkpointing and resume mechanism
+│   ├── report_generator.py            # Result summarization and report creation
+│   ├── requirements_classical_ml.txt  # Dependencies for classical ML pipeline
+│   ├── run.py                         # Python execution script
+│   ├── run.bat                        # Windows execution script
+│   ├── run.sh                         # Linux execution script
+│   ├── results/                       # Experimental outputs
+│   └── main.py                        # Entry point for classical ML experiments
+│
+├── data/
+│   ├── README.md                      # Dataset description and source
+│   └── dataset.txt                    # URL dataset (URL, label)
+│
+├── cv_checkpoints/                    # Auto-saved cross-validation states
+├── models/                            # Trained models (auto-generated)
+├── requirements.txt                   # Deep Learning project dependencies
+├── README.md                          # Project overview and documentation
+└── LICENSE
+
+```
+
+
+
 # URL Phishing Detection - Ensemble Deep Learning Framework
 
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
@@ -126,32 +199,8 @@ classifier.train_final_ensemble(
 
 ```
 
-## 📁 Project Structure
 
-```
-url-phishing-detection/
-├── src/
-│   ├── __init__.py
-│   ├── preprocessing.py
-│   ├── model.py
-│   ├── ensemble_classifier.py
-│   ├── evaluation.py
-│   ├── statistical_tests.py
-│	├── feature_extraction.py
-│   └── main.py
-│
-├── data/
-│   ├── README.md        👈 dataset description and source
-│   └── dataset.txt
-│       
-│
-├── cv_checkpoints/    # Auto-saved CV states
-├── models/   		   # Saved models (auto-generated)
-├── requirements.txt
-├── README.md
-└── LICENSE
-
-```
+ 
 
 ### Dataset
 
