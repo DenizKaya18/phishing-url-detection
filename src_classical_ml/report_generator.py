@@ -146,25 +146,119 @@ class ReportGenerator:
                 print(f"[ERROR] Failed to generate CM for {model_name}: {e}")
     
     def _generate_statistical_report(self, df_base):
-        """Generate statistical significance report"""
+        """Generate comprehensive statistical significance report"""
         if df_base.empty:
             print("[WARNING] No baseline data for statistical analysis")
             return
         
         try:
-            from scipy.stats import ttest_rel, wilcoxon, f_oneway
+            # Import gerekli kütüphaneler
+            import numpy as np
+            from scipy.stats import ttest_rel, wilcoxon, f_oneway, chi2_contingency
+            from scipy.stats import chi2
             
-            # Collect fold accuracies per model
+            # Collect results per model
             results_per_model = {}
             for model in df_base['Model'].unique():
-                accuracies = df_base[df_base['Model'] == model]['Accuracy'].values.tolist()
-                results_per_model[model] = {'fold_accuracies': accuracies}
+                model_data = df_base[df_base['Model'] == model]
+                accuracies = model_data['Accuracy'].values.tolist()
+                
+                # Try to get predictions if available
+                y_true = model_data['y_true'].values if 'y_true' in model_data.columns else None
+                y_pred = model_data['y_pred'].values if 'y_pred' in model_data.columns else None
+                
+                results_per_model[model] = {
+                    'fold_accuracies': accuracies,
+                    'y_true': y_true,
+                    'y_pred': y_pred
+                }
             
             model_names = list(results_per_model.keys())
-            report_lines = []
+            if not model_names:
+                print("[WARNING] No models found for statistical analysis")
+                return
+                
+            n_folds = len(results_per_model[model_names[0]]['fold_accuracies'])
             
-            # Paired t-test
-            report_lines.append("\n--- Paired T-Test ---")
+            report_lines = []
+            report_lines.append("=" * 80)
+            report_lines.append("📊 COMPREHENSIVE STATISTICAL SIGNIFICANCE REPORT")
+            report_lines.append("Classical ML Models - Cross-Validated")
+            report_lines.append("=" * 80)
+            report_lines.append("")
+            
+            # ==================== McNEMAR TEST ====================
+            if all(results_per_model[m]['y_true'] is not None and 
+                results_per_model[m]['y_pred'] is not None for m in model_names):
+                
+                report_lines.append("=" * 80)
+                report_lines.append("🔬 McNEMAR TEST: PAIRWISE MODEL COMPARISONS")
+                report_lines.append("=" * 80)
+                report_lines.append("Testing if models have significantly different error patterns")
+                report_lines.append("")
+                
+                y_true_all = np.array(results_per_model[model_names[0]]['y_true'])
+                
+                header = f"{'Model A':<20} {'Model B':<20} {'Acc A':<10} {'Acc B':<10} {'χ²':<10} {'p-value':<10} {'Result':<15}"
+                report_lines.append(header)
+                report_lines.append("-" * 95)
+                
+                for i, model_a in enumerate(model_names):
+                    for model_b in model_names[i+1:]:
+                        pred_a = np.array(results_per_model[model_a]['y_pred'])
+                        pred_b = np.array(results_per_model[model_b]['y_pred'])
+                        
+                        correct_a = (pred_a == y_true_all).astype(int)
+                        correct_b = (pred_b == y_true_all).astype(int)
+                        
+                        # McNemar contingency
+                        a01 = np.sum((correct_a == 0) & (correct_b == 1))
+                        a10 = np.sum((correct_a == 1) & (correct_b == 0))
+                        
+                        if (a01 + a10) == 0:
+                            chi2_stat = 0
+                            p_value = 1.0
+                        else:
+                            chi2_stat = ((abs(a10 - a01) - 1) ** 2) / (a10 + a01)  # Continuity correction
+                            p_value = 1 - chi2.cdf(chi2_stat, df=1)
+                        
+                        acc_a = np.mean(correct_a)
+                        acc_b = np.mean(correct_b)
+                        
+                        sig_marker = "***" if p_value < 0.01 else "**" if p_value < 0.05 else ""
+                        result = f"Significant{sig_marker}" if p_value < 0.05 else "Not significant"
+                        
+                        line = f"{model_a:<20} {model_b:<20} {acc_a:<10.4f} {acc_b:<10.4f} {chi2_stat:<10.4f} {p_value:<10.6f} {result:<15}"
+                        report_lines.append(line)
+                
+                report_lines.append("-" * 95)
+                report_lines.append("Legend: *** p<0.01 (highly significant), ** p<0.05 (significant)")
+                report_lines.append("")
+            
+            # ==================== PAIRED T-TEST ====================
+            report_lines.append("=" * 80)
+            report_lines.append("📈 PAIRED T-TEST: ALL MODELS COMPARISON (ACCURACY)")
+            report_lines.append("=" * 80)
+            report_lines.append(f"Comparing accuracy across {n_folds} folds")
+            report_lines.append("")
+            
+            # Summary statistics
+            report_lines.append(f"{'Model':<20} {'Mean':<10} {'Std':<10} {'Min':<10} {'Max':<10}")
+            report_lines.append("-" * 60)
+            
+            for model_name in model_names:
+                accs = np.array(results_per_model[model_name]['fold_accuracies'])
+                line = f"{model_name:<20} {np.mean(accs):<10.4f} {np.std(accs):<10.4f} {np.min(accs):<10.4f} {np.max(accs):<10.4f}"
+                report_lines.append(line)
+            
+            report_lines.append("-" * 60)
+            report_lines.append("")
+            
+            # Pairwise comparisons
+            header = f"{'Model A':<20} {'Model B':<20} {'t-stat':<10} {'p-value':<10} {'Result':<15}"
+            report_lines.append(header)
+            report_lines.append("-" * 75)
+            
             for i, m1 in enumerate(model_names):
                 for m2 in model_names[i+1:]:
                     a = np.array(results_per_model[m1]['fold_accuracies'])
@@ -172,11 +266,31 @@ class ReportGenerator:
                     
                     if len(a) == len(b) and len(a) > 1:
                         t, p = ttest_rel(a, b)
-                        res = "Significant" if p < 0.05 else "Not significant"
-                        report_lines.append(f"{m1} vs {m2}: t={t:.4f}, p={p:.6f} ({res})")
+                        sig_marker = "***" if p < 0.01 else "**" if p < 0.05 else ""
+                        res = f"Significant{sig_marker}" if p < 0.05 else "Not significant"
+                        line = f"{m1:<20} {m2:<20} {t:<10.4f} {p:<10.6f} {res:<15}"
+                        report_lines.append(line)
             
-            # Wilcoxon test
-            report_lines.append("\n--- Wilcoxon Test ---")
+            report_lines.append("-" * 75)
+            report_lines.append("Legend: *** p<0.01, ** p<0.05")
+            report_lines.append("")
+            report_lines.append("💡 INTERPRETATION:")
+            report_lines.append("  • Paired t-test compares average performance across folds")
+            report_lines.append("  • H0: Both models perform equally on average")
+            report_lines.append("  • If p<0.05: Significant performance difference")
+            report_lines.append("")
+            
+            # ==================== WILCOXON TEST ====================
+            report_lines.append("=" * 80)
+            report_lines.append("📊 WILCOXON TEST: ALL MODELS COMPARISON (ACCURACY)")
+            report_lines.append("=" * 80)
+            report_lines.append(f"Non-parametric comparison across {n_folds} folds")
+            report_lines.append("")
+            
+            header = f"{'Model A':<20} {'Model B':<20} {'Median A':<12} {'Median B':<12} {'W-stat':<10} {'p-value':<10} {'Result':<15}"
+            report_lines.append(header)
+            report_lines.append("-" * 85)
+            
             for i, m1 in enumerate(model_names):
                 for m2 in model_names[i+1:]:
                     a = np.array(results_per_model[m1]['fold_accuracies'])
@@ -185,21 +299,58 @@ class ReportGenerator:
                     if len(a) == len(b) and len(a) > 0:
                         try:
                             w, p = wilcoxon(a, b)
-                            res = "Significant" if p < 0.05 else "Not significant"
-                            report_lines.append(f"{m1} vs {m2}: w={w:.4f}, p={p:.6f} ({res})")
+                            median_a = np.median(a)
+                            median_b = np.median(b)
+                            sig_marker = "***" if p < 0.01 else "**" if p < 0.05 else ""
+                            res = f"Significant{sig_marker}" if p < 0.05 else "Not significant"
+                            line = f"{m1:<20} {m2:<20} {median_a:<12.4f} {median_b:<12.4f} {w:<10.4f} {p:<10.6f} {res:<15}"
+                            report_lines.append(line)
                         except Exception as e:
-                            report_lines.append(f"{m1} vs {m2}: wilcoxon failed ({e})")
+                            line = f"{m1:<20} {m2:<20} Wilcoxon failed ({str(e)[:30]})"
+                            report_lines.append(line)
             
-            # ANOVA
-            report_lines.append("\n--- ANOVA ---")
-            all_data = [np.array(results_per_model[m]['fold_accuracies']) 
-                       for m in model_names if len(results_per_model[m]['fold_accuracies']) > 0]
+            report_lines.append("-" * 85)
+            report_lines.append("💡 INTERPRETATION:")
+            report_lines.append("  • Non-parametric alternative to paired t-test")
+            report_lines.append("  • More robust to outliers and non-normal distributions")
+            report_lines.append("")
+            
+            # ==================== ANOVA ====================
+            report_lines.append("=" * 80)
+            report_lines.append("📉 ONE-WAY ANOVA: ALL MODELS COMPARISON (ACCURACY)")
+            report_lines.append("=" * 80)
+            report_lines.append(f"Testing if performance differs among all {len(model_names)} models")
+            report_lines.append("")
+            
+            all_data = [np.array(results_per_model[m]['fold_accuracies'])
+                    for m in model_names if len(results_per_model[m]['fold_accuracies']) > 0]
+            
             if len(all_data) > 1:
-                f, p = f_oneway(*all_data)
-                report_lines.append(f"F={f:.4f}, p={p:.6f}")
+                f_stat, p = f_oneway(*all_data)
+                
+                report_lines.append(f"F-statistic: {f_stat:.4f}")
+                report_lines.append(f"p-value: {p:.6f}")
+                
+                sig_marker = "***" if p < 0.01 else "**" if p < 0.05 else ""
+                significant = f"Yes{sig_marker}" if p < 0.05 else "No"
+                report_lines.append(f"Significant difference (α=0.05): {significant}")
+                report_lines.append("")
+                report_lines.append("💡 INTERPRETATION:")
+                report_lines.append("  • H0: All models perform equally well on average")
+                report_lines.append("  • H1: At least one model performs significantly differently")
+                report_lines.append("  • If p < 0.05: Reject H0 (significant differences exist)")
+                report_lines.append("")
             
-            # Cohen's d
-            report_lines.append("\n--- Cohen's d ---")
+            # ==================== COHEN'S D ====================
+            report_lines.append("=" * 80)
+            report_lines.append("📏 EFFECT SIZES: COHEN'S D (Pairwise Comparisons)")
+            report_lines.append("=" * 80)
+            report_lines.append("")
+            
+            header = f"{'Model A':<20} {'Model B':<20} {'Cohens d':<12} {'|Effect|':<12} {'Interpretation':<25}"
+            report_lines.append(header)
+            report_lines.append("-" * 95)
+            
             for i, m1 in enumerate(model_names):
                 for m2 in model_names[i+1:]:
                     a = np.array(results_per_model[m1]['fold_accuracies'])
@@ -212,7 +363,49 @@ class ReportGenerator:
                             ((len(a)-1)*std_a**2 + (len(b)-1)*std_b**2) / (len(a)+len(b)-2)
                         )
                         d = (mean_a - mean_b) / pooled_std if pooled_std > 0 else 0
-                        report_lines.append(f"{m1} vs {m2}: d={d:.4f}")
+                        
+                        abs_d = abs(d)
+                        if abs_d < 0.2:
+                            effect = "Negligible"
+                        elif abs_d < 0.5:
+                            effect = "Small"
+                        elif abs_d < 0.8:
+                            effect = "Medium"
+                        else:
+                            effect = "Large"
+                        
+                        direction = "A better" if d > 0 else "B better" if d < 0 else "Equal"
+                        
+                        line = f"{m1:<20} {m2:<20} {d:<12.4f} {abs_d:<12.4f} {effect} ({direction})"
+                        report_lines.append(line)
+            
+            report_lines.append("-" * 95)
+            report_lines.append("💡 COHEN'S D INTERPRETATION:")
+            report_lines.append("  • 0.0 - 0.2: Negligible effect")
+            report_lines.append("  • 0.2 - 0.5: Small effect")
+            report_lines.append("  • 0.5 - 0.8: Medium effect")
+            report_lines.append("  • 0.8+:      Large effect")
+            report_lines.append("")
+            
+            # ==================== SUMMARY ====================
+            report_lines.append("=" * 80)
+            report_lines.append("📋 TEST SUMMARY")
+            report_lines.append("=" * 80)
+            report_lines.append("")
+            
+            summary_header = f"{'Test':<20} {'Purpose':<40} {'Models Tested':<15}"
+            report_lines.append(summary_header)
+            report_lines.append("-" * 75)
+            report_lines.append(f"{'McNemar':<20} {'Error pattern differences':<40} {'All pairs':<15}")
+            report_lines.append(f"{'Paired t-test':<20} {'Mean accuracy differences':<40} {'All pairs':<15}")
+            report_lines.append(f"{'Wilcoxon':<20} {'Non-parametric comparison':<40} {'All pairs':<15}")
+            report_lines.append(f"{'One-way ANOVA':<20} {'All models vs each other':<40} {'All models':<15}")
+            report_lines.append(f"{'Cohens d':<20} {'Effect size magnitude':<40} {'All pairs':<15}")
+            report_lines.append("")
+            
+            report_lines.append("=" * 80)
+            report_lines.append("✅ Statistical Analysis Complete")
+            report_lines.append("=" * 80)
             
             # Save report
             stat_path = "Statistical_Significance_Report.txt"
@@ -220,7 +413,14 @@ class ReportGenerator:
                 f.write("\n".join(report_lines))
             print(f"[OK] Statistical report saved: {stat_path}")
             
-            self.safe_copy_to_drive(stat_path, stat_path)
+            # Print to console
+            print("\n".join(report_lines))
+            
+            # Eğer safe_copy_to_drive method'u varsa
+            if hasattr(self, 'safe_copy_to_drive'):
+                self.safe_copy_to_drive(stat_path, stat_path)
             
         except Exception as e:
             print(f"[ERROR] Statistical analysis failed: {e}")
+            import traceback
+            traceback.print_exc()
