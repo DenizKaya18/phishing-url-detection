@@ -2,7 +2,7 @@
 
 This repository contains **two complementary pipelines** evaluated on the **same phishing URL dataset**:
 
-### 🔹 Deep Learning Ensemble (Primary Contribution)
+### 🔹 Deep Learning Ensemble
 - CNN–BiLSTM based architectures
 - Attention mechanisms
 - Multi-model ensemble with cross-validation
@@ -55,6 +55,7 @@ url-phishing-detection/
 │   ├── run.bat                        # Windows execution script
 │   ├── run.sh                         # Linux execution script
 │   ├── results/                       # Experimental outputs
+│	├── README.md                      # Project overview and documentation
 │   └── main.py                        # Entry point for classical ML experiments
 │
 ├── data/
