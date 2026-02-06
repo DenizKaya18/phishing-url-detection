@@ -7,7 +7,7 @@ src_classical_ml/results/*
 # Keep directories in repo
 !models/.gitkeep
 !cv_checkpoints/.gitkeep
-!resultss/.gitkeep
+!results/.gitkeep
 !src_classical_ml/results/.gitkeep
 
 # Python cache
