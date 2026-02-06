@@ -36,10 +36,10 @@ if gpus:
     mixed_precision.set_global_policy(policy)
 
 # ==================== MODEL PARAMETERS ====================
-N_FOLDS = 3
+N_FOLDS = 10
 N_MODELS = 4
 BATCH_SIZE = 512
-EPOCHS = 3
+EPOCHS = 15
 RANDOM_SEEDS = [42, 123, 456, 789]
 
 # ==================== VISUAL SETTINGS ====================
