@@ -1,11 +1,13 @@
 # Ignore trained models and checkpoints
 models/*
 cv_checkpoints/*
+results/*
 src_classical_ml/results/*
 
 # Keep directories in repo
 !models/.gitkeep
 !cv_checkpoints/.gitkeep
+!resultss/.gitkeep
 !src_classical_ml/results/.gitkeep
 
 # Python cache

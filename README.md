@@ -30,14 +30,13 @@ Both pipelines:
 ```
 url-phishing-detection/
 ├── src/                               # Deep Learning pipeline
-│   ├── __init__.py
-│   ├── preprocessing.py               # URL cleaning and tokenization
-│   ├── feature_extraction.py          # Deep learning feature preparation
-│   ├── model.py                       # CNN / LSTM model definitions
-│   ├── ensemble_classifier.py         # Ensemble learning logic
-│   ├── evaluation.py                  # Performance evaluation metrics
-│   ├── statistical_tests.py           # Statistical significance testing
-│   └── main.py                        # Entry point for DL experiments
+│   ├── config.py                 	   # Global constants, hardware (GPU) settings, and paths
+│   ├── utils.py                  	   # Logger class and time formatting helpers
+│   ├── features.py               	   # VectorizedFeatureExtractor and IsolatedFeatureManager
+│   ├── models.py                 	   # Hybrid Deep Learning architectures (CNN, LSTM, Attention)
+│   ├── classifier.py             	   # OptimizedEnsembleURLClassifierCV (Main class logic)
+│   ├── statistical_tests.py      	   # StatisticalSignificanceAnalyzer (McNemar, t-test, Wilcoxon)
+│   └── main.py                   	   # Entry point for DL experiments and coordinate pipeline
 │
 ├── src_classical_ml/                  # Classical Machine Learning pipeline
 │   ├── __init__.py                    # Package initialization
@@ -64,6 +63,7 @@ url-phishing-detection/
 │
 ├── cv_checkpoints/                    # Auto-saved cross-validation states
 ├── models/                            # Trained models (auto-generated)
+├── results/                      	   # Generated logs and statistical CSV reports
 ├── requirements.txt                   # Deep Learning project dependencies
 ├── README.md                          # Project overview and documentation
 └── LICENSE

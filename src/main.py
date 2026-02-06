@@ -1,99 +1,184 @@
-"""
-Main entry point for URL Phishing Detection Pipeline.
-Replicates Google Colab environment settings and execution flow.
-"""
-
 import sys
-import tensorflow as tf
-from tensorflow.keras import mixed_precision
-import numpy as np
+import os
 import time
+import numpy as np
+from src.config import *
+from src.utils import Logger, format_time
+from src.classifier import OptimizedEnsembleURLClassifierCV
+from src.models import CheckpointManager
 
-# 1. System Settings
-sys.setrecursionlimit(21000)
-
-# 2. GPU & Mixed Precision Setup
-gpus = tf.config.list_physical_devices('GPU')
-if gpus:
-    try:
-        for gpu in gpus:
-            tf.config.experimental.set_memory_growth(gpu, True)
-        print(f"✓ GPU Memory Growth Enabled: {len(gpus)} GPU(s)")
-        
-        policy = mixed_precision.Policy('mixed_float16')
-        mixed_precision.set_global_policy(policy)
-        print("✓ Mixed Precision (mixed_float16) Enabled")
-    except RuntimeError as e:
-        print(e)
-
-from src.preprocessing import prepare_data_from_raw
-from src.ensemble_classifier import OptimizedEnsembleURLClassifierCV, CheckpointManager
-from src.statistical_tests import run_statistical_tests
+# Redirect all stdout to both terminal and a result file in results/ directory
+sys.stdout = Logger()
 
 def main():
-    print("="*80)
-    print("URL PHISHING DETECTION - ENSEMBLE DEEP LEARNING (OPTIMIZED)")
-    print("="*80)
-
-    # Checkpoint Manager
-    checkpoint_mgr = CheckpointManager(storage_type="local")
-
-    # Data Loading
-    RAW_DATA_FILE = "data/dataset.txt" # Adjust path as needed
+    """
+    Main execution pipeline for URL Phishing Detection.
+    Coordinates data loading, cross-validation, final training, and detailed reporting.
+    """
+    start_total_time = time.time()
     
-    classifier = OptimizedEnsembleURLClassifierCV(
-        n_models=4,
-        n_folds=3,
-        random_seeds=[42, 123, 456, 789]
+    print("="*80)
+    print("🚀 URL PHISHING DETECTION SYSTEM - MODULAR VERSION")
+    print("="*80)
+    print(f"Working Directory: {BASE_DIR}")
+    print(f"Data Path: {DATA_PATH}")
+    print(f"Results will be saved to: {RESULTS_DIR}")
+    print("-" * 80)
+
+    # 1. Initialize Classifier and Checkpoint Manager
+    ensemble_clf = OptimizedEnsembleURLClassifierCV(
+        n_models=N_MODELS,
+        n_folds=N_FOLDS,
+        random_seeds=RANDOM_SEEDS
+    )
+    
+    checkpoint_mgr = CheckpointManager(checkpoint_dir=CHECKPOINT_DIR)
+
+    # 2. Data Preparation
+    if not os.path.exists(DATA_PATH):
+        print(f"✗ Error: Dataset not found at {DATA_PATH}")
+        return
+
+    X_url_train, y_train, X_url_test, y_test = ensemble_clf.prepare_data_from_raw(
+        DATA_PATH, test_size=0.2
     )
 
-    # 1. Prepare Data
-    (X_url_train, y_train, X_url_test, y_test, rows_all, tokenizer, max_len, vocab_size) = \
-        prepare_data_from_raw(RAW_DATA_FILE, test_size=0.2)
-
-    rows_train = [(X_url_train[i], y_train[i]) for i in range(len(X_url_train))]
-    rows_test = [(X_url_test[i], y_test[i]) for i in range(len(X_url_test))]
-
-    # 2. Cross Validation
-    print("\n>>> Starting Cross-Validation...")
-    classifier.cross_validate_ensemble(
-        X_url_train, y_train, rows_train,
+    # 3. PHASE 1: Cross-Validation with Checkpoints
+    print("\n" + "="*80)
+    print("📋 PHASE 1: STARTING CROSS-VALIDATION")
+    print("="*80)
+    
+    ensemble_clf.cross_validate_ensemble(
+        X_url_train, 
+        y_train, 
         checkpoint_mgr=checkpoint_mgr,
-        epochs=3,
-        batch_size=512
-    )
-    
-    # 3. Efficiency Report
-    classifier.print_training_efficiency_summary()
-    classifier.export_efficiency_report("training_efficiency_report.csv")
-
-    # 4. Final Training
-    print("\n>>> Starting Final Ensemble Training...")
-    classifier.train_final_ensemble(
-        X_url_train, y_train, rows_train,
-        X_url_test, y_test, rows_test,
-        epochs=3,
-        batch_size=512
+        epochs=EPOCHS,
+        batch_size=BATCH_SIZE
     )
 
-    # 5. Evaluation
-    print("\n>>> Final Evaluation...")
-    classifier.evaluate_final_ensemble()
-    classifier.print_comprehensive_summary()
-    classifier.print_confusion_matrix_and_metrics()
+    # 4. PHASE 2: Final Ensemble Training
+    print("\n" + "="*80)
+    print("📋 PHASE 2: TRAINING FINAL ENSEMBLE")
+    print("="*80)
     
-    # 6. Save Model
-    classifier.save_model_ensemble("models/")
+    ensemble_clf.train_final_ensemble(
+        X_url_train, 
+        y_train, 
+        X_url_test, 
+        y_test,
+        epochs=EPOCHS,
+        batch_size=BATCH_SIZE
+    )
+    
+    # 5. PHASE 3: Evaluation & Detailed Reporting
+    # This generates the COMPREHENSIVE PERFORMANCE REPORT and TIME STATISTICS
+    ensemble_results, best_method = ensemble_clf.evaluate_final_ensemble(X_url_test, y_test)
+    ensemble_clf.print_comprehensive_summary(ensemble_results, best_method)
+    
+    # Orijinal Log: COMPREHENSIVE CONFUSION MATRIX AND METRICS
+    print("\n" + "="*80)
+    print("?? COMPREHENSIVE CONFUSION MATRIX AND PERFORMANCE METRICS REPORT")
+    print("="*80)
+    
+    # CV Average Results
+    print("\n" + "="*80)
+    print("? CROSS-VALIDATION RESULTS (Average across 10 Folds)")
+    print("="*80)
+    if ensemble_clf.cv_confusion_matrices:
+        avg_cm = np.mean(ensemble_clf.cv_confusion_matrices, axis=0)
+        ensemble_clf.print_confusion_matrix_detailed(avg_cm, "Average Confusion Matrix (CV)")
+    
+    # Detailed Comparison Table (CV vs Final Test)
+    ensemble_clf.print_cv_comparison(ensemble_results, best_method)
 
-    # 7. Latency & Ablation
-    classifier.measure_single_url_latency(X_url_test, n_samples=100)
-    classifier.run_ablation_study_final(X_url_train, y_train, X_url_test, y_test)
+    # Fold-by-Fold Metrics breakdown
+    print("\n" + "="*80)
+    print("📋 DETAILED FOLD-BY-FOLD METRICS")
+    print("="*80)
+    if hasattr(ensemble_clf, 'cv_metrics') and ensemble_clf.cv_metrics:
+        for i, m in enumerate(ensemble_clf.cv_metrics):
+            ensemble_clf.print_metrics_detailed(m, f"Fold {i+1} Metrics")
 
-    # 8. Stats
+    # 6. PHASE 4: Latency Summary
+    # Measures how fast the system processes a single URL
+    ensemble_clf.measure_single_url_latency(X_url_test, n_samples=100)
+
+    # 7. PHASE 5: Statistical Significance Testing
+    print("\n" + "="*80)
+    print("📊 PHASE 5: STATISTICAL SIGNIFICANCE TESTING")
+    print("="*80)
     try:
-        run_statistical_tests(classifier)
+        from src.statistical_tests import run_statistical_analysis
+        analyzer = run_statistical_analysis(ensemble_clf)
+        # Add ANOVA comparison from logs
+        analyzer.run_anova_all_models()
     except Exception as e:
-        print(f"Stats error: {e}")
+        print(f"[!] Statistical analysis skipped or failed: {e}")
+    
+    # 8. PHASE 6: Save Final Models and Configuration
+    print("\n" + "="*80)
+    print("📋 PHASE 6: SAVING MODELS AND RESULTS")
+    print("="*80)
+    
+    model_save_path = os.path.join(MODELS_DIR, "ensemble_final")
+    ensemble_clf.save_model_ensemble(save_path=model_save_path)
+
+    # Final Summary Execution
+    total_duration = time.time() - start_total_time
+    print("\n" + "="*80)
+    print("✅ PROCESS COMPLETED SUCCESSFULLY")
+    print(f"Total System Execution Time: {format_time(total_duration)}")
+    print(f"Final models saved in: {MODELS_DIR}")
+    print(f"Detailed logs saved in: {RESULTS_DIR}")
+    print("="*80)
+
+def extend_classifier_functionality():
+    """
+    Helper function to inject utility functions into the class dynamically.
+    Ensures model saving logic is present without cluttering classifier.py.
+    """
+    import pickle
+    
+    def save_model_ensemble(self, save_path):
+        if not os.path.exists(save_path):
+            os.makedirs(save_path, exist_ok=True)
+
+        # Save pre-processing tools (Tokenizer and Scaler)
+        with open(os.path.join(save_path, "tokenizer.pkl"), "wb") as f:
+            pickle.dump(self.tokenizer, f)
+        with open(os.path.join(save_path, "scaler.pkl"), "wb") as f:
+            pickle.dump(self.scaler, f)
+
+        # Save model architectures and info
+        config = {
+            'vocab_size': self.vocab_size,
+            'max_len': self.max_len,
+            'n_models': self.n_models,
+            'random_seeds': self.random_seeds,
+            'training_finished_at': time.strftime("%Y-%m-%d %H:%M:%S")
+        }
+        with open(os.path.join(save_path, "config.pkl"), "wb") as f:
+            pickle.dump(config, f)
+
+        # Save each model in the ensemble as a .keras file
+        for i, model in enumerate(self.models):
+            model.save(os.path.join(save_path, f"model_{i+1}.keras"))
+        
+        print(f"✓ All models and configuration successfully exported to {save_path}")
+
+    # Inject the function into the class definition at runtime
+    OptimizedEnsembleURLClassifierCV.save_model_ensemble = save_model_ensemble
 
 if __name__ == "__main__":
-    main()
+    # Apply injections and start the main process
+    extend_classifier_functionality()
+    
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n\n⚠️ SYSTEM INTERRUPTED BY USER")
+        print("✓ Progress state maintained in cv_checkpoints/ directory.")
+    except Exception as e:
+        print(f"\n✗ CRITICAL SYSTEM ERROR: {e}")
+        import traceback
+        traceback.print_exc()

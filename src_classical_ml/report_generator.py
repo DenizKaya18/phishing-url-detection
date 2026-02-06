@@ -146,280 +146,174 @@ class ReportGenerator:
                 print(f"[ERROR] Failed to generate CM for {model_name}: {e}")
     
     def _generate_statistical_report(self, df_base):
-        """Generate comprehensive statistical significance report"""
+        """Generate comprehensive statistical significance report - Friedman + Nemenyi focus"""
         if df_base.empty:
             print("[WARNING] No baseline data for statistical analysis")
             return
         
         try:
-            # Import gerekli kütüphaneler
+            # Gerekli kütüphaneler
             import numpy as np
-            from scipy.stats import ttest_rel, wilcoxon, f_oneway, chi2_contingency
-            from scipy.stats import chi2
+            import pandas as pd
+            from scipy.stats import friedmanchisquare, chi2
+            import scikit_posthocs as sp
             
-            # Collect results per model
+            # Sonuçları model bazında topla
             results_per_model = {}
             for model in df_base['Model'].unique():
-                model_data = df_base[df_base['Model'] == model]
+                model_data = df_base[df_base['Model'] == model].sort_values('Fold')
                 accuracies = model_data['Accuracy'].values.tolist()
-                
-                # Try to get predictions if available
-                y_true = model_data['y_true'].values if 'y_true' in model_data.columns else None
-                y_pred = model_data['y_pred'].values if 'y_pred' in model_data.columns else None
                 
                 results_per_model[model] = {
                     'fold_accuracies': accuracies,
-                    'y_true': y_true,
-                    'y_pred': y_pred
                 }
             
             model_names = list(results_per_model.keys())
             if not model_names:
                 print("[WARNING] No models found for statistical analysis")
                 return
-                
+            
             n_folds = len(results_per_model[model_names[0]]['fold_accuracies'])
+            if any(len(results_per_model[m]['fold_accuracies']) != n_folds for m in model_names):
+                print("[ERROR] Models have different number of folds → analysis aborted")
+                return
             
             report_lines = []
             report_lines.append("=" * 80)
             report_lines.append("📊 COMPREHENSIVE STATISTICAL SIGNIFICANCE REPORT")
-            report_lines.append("Classical ML Models - Cross-Validated")
+            report_lines.append("Friedman Test + Nemenyi Post-hoc - Classical ML Models")
             report_lines.append("=" * 80)
+            report_lines.append(f"Folds: {n_folds} | Models: {len(model_names)}")
             report_lines.append("")
             
-            # ==================== McNEMAR TEST ====================
-            if all(results_per_model[m]['y_true'] is not None and 
-                results_per_model[m]['y_pred'] is not None for m in model_names):
-                
+            # ────────────────────────────────────────────────
+            # 1. Friedman Testi
+            # ────────────────────────────────────────────────
+            report_lines.append("=" * 80)
+            report_lines.append("🔬 FRIEDMAN TEST (Non-parametric ANOVA alternative)")
+            report_lines.append("=" * 80)
+            report_lines.append("H0: All models perform equally (no difference in ranks)")
+            report_lines.append("")
+            
+            # Fold × Model matrisi (her satır bir fold)
+            data_matrix = np.array([results_per_model[m]['fold_accuracies'] for m in model_names]).T
+            
+            # Ortalama doğrulukları da gösterelim
+            mean_acc = {m: np.mean(results_per_model[m]['fold_accuracies']) for m in model_names}
+            report_lines.append("Model Performans Özeti (Mean Accuracy):")
+            for m, acc in sorted(mean_acc.items(), key=lambda x: x[1], reverse=True):
+                report_lines.append(f"  {m:<25} {acc:.4f}")
+            report_lines.append("")
+            
+            stat, p = friedmanchisquare(*data_matrix.T)
+            
+            report_lines.append(f"Chi-square statistic: {stat:.4f}")
+            report_lines.append(f"p-value:              {p:.6f}")
+            
+            sig_marker = "***" if p < 0.01 else "**" if p < 0.05 else ""
+            result = f"Significant{sig_marker} (reject H0)" if p < 0.05 else "Not significant (fail to reject H0)"
+            report_lines.append(f"Result (α=0.05):      {result}")
+            report_lines.append("")
+            report_lines.append("Interpretation:")
+            report_lines.append("  • p < 0.05 → At least one model differs significantly")
+            report_lines.append("  • p ≥ 0.05 → No evidence of overall difference")
+            report_lines.append("")
+            
+            # ────────────────────────────────────────────────
+            # 2. Nemenyi Post-hoc (sadece Friedman anlamlıysa)
+            # ────────────────────────────────────────────────
+            nemenyi_matrix = None
+            if p < 0.05:
                 report_lines.append("=" * 80)
-                report_lines.append("🔬 McNEMAR TEST: PAIRWISE MODEL COMPARISONS")
+                report_lines.append("🔍 NEMENYI POST-HOC TEST (Pairwise comparisons)")
                 report_lines.append("=" * 80)
-                report_lines.append("Testing if models have significantly different error patterns")
+                report_lines.append("Performed only if Friedman p < 0.05")
                 report_lines.append("")
                 
-                y_true_all = np.array(results_per_model[model_names[0]]['y_true'])
+                nemenyi = sp.posthoc_nemenyi_friedman(data_matrix)
+                nemenyi.index = model_names
+                nemenyi.columns = model_names
                 
-                header = f"{'Model A':<20} {'Model B':<20} {'Acc A':<10} {'Acc B':<10} {'χ²':<10} {'p-value':<10} {'Result':<15}"
-                report_lines.append(header)
-                report_lines.append("-" * 95)
+                # Matrisi rapor için güzel formatla
+                report_lines.append("Nemenyi p-values (symmetric matrix):")
+                report_lines.append(nemenyi.round(6).to_string())
+                report_lines.append("")
                 
-                for i, model_a in enumerate(model_names):
-                    for model_b in model_names[i+1:]:
-                        pred_a = np.array(results_per_model[model_a]['y_pred'])
-                        pred_b = np.array(results_per_model[model_b]['y_pred'])
-                        
-                        correct_a = (pred_a == y_true_all).astype(int)
-                        correct_b = (pred_b == y_true_all).astype(int)
-                        
-                        # McNemar contingency
-                        a01 = np.sum((correct_a == 0) & (correct_b == 1))
-                        a10 = np.sum((correct_a == 1) & (correct_b == 0))
-                        
-                        if (a01 + a10) == 0:
-                            chi2_stat = 0
-                            p_value = 1.0
-                        else:
-                            chi2_stat = ((abs(a10 - a01) - 1) ** 2) / (a10 + a01)  # Continuity correction
-                            p_value = 1 - chi2.cdf(chi2_stat, df=1)
-                        
-                        acc_a = np.mean(correct_a)
-                        acc_b = np.mean(correct_b)
-                        
-                        sig_marker = "***" if p_value < 0.01 else "**" if p_value < 0.05 else ""
-                        result = f"Significant{sig_marker}" if p_value < 0.05 else "Not significant"
-                        
-                        line = f"{model_a:<20} {model_b:<20} {acc_a:<10.4f} {acc_b:<10.4f} {chi2_stat:<10.4f} {p_value:<10.6f} {result:<15}"
-                        report_lines.append(line)
+                # Anlamlı çiftleri listele
+                significant_pairs = []
+                for i in range(len(model_names)):
+                    for j in range(i+1, len(model_names)):
+                        p_val = nemenyi.iloc[i, j]
+                        if p_val < 0.05:
+                            sig_marker = "***" if p_val < 0.01 else "**"
+                            significant_pairs.append(
+                                f"{model_names[i]} vs {model_names[j]}: p={p_val:.4f}{sig_marker}"
+                            )
                 
-                report_lines.append("-" * 95)
-                report_lines.append("Legend: *** p<0.01 (highly significant), ** p<0.05 (significant)")
+                if significant_pairs:
+                    report_lines.append("Significant pairwise differences (p < 0.05):")
+                    for pair in significant_pairs:
+                        report_lines.append(f"  • {pair}")
+                else:
+                    report_lines.append("No significant pairwise differences found (all p ≥ 0.05)")
+                report_lines.append("")
+                
+                nemenyi_matrix = nemenyi
+            else:
+                report_lines.append("Friedman testi anlamlı değil → Nemenyi post-hoc yapılmadı.")
                 report_lines.append("")
             
-            # ==================== PAIRED T-TEST ====================
+            # ────────────────────────────────────────────────
+            # 3. Özet Tablo
+            # ────────────────────────────────────────────────
             report_lines.append("=" * 80)
-            report_lines.append("📈 PAIRED T-TEST: ALL MODELS COMPARISON (ACCURACY)")
-            report_lines.append("=" * 80)
-            report_lines.append(f"Comparing accuracy across {n_folds} folds")
-            report_lines.append("")
-            
-            # Summary statistics
-            report_lines.append(f"{'Model':<20} {'Mean':<10} {'Std':<10} {'Min':<10} {'Max':<10}")
-            report_lines.append("-" * 60)
-            
-            for model_name in model_names:
-                accs = np.array(results_per_model[model_name]['fold_accuracies'])
-                line = f"{model_name:<20} {np.mean(accs):<10.4f} {np.std(accs):<10.4f} {np.min(accs):<10.4f} {np.max(accs):<10.4f}"
-                report_lines.append(line)
-            
-            report_lines.append("-" * 60)
-            report_lines.append("")
-            
-            # Pairwise comparisons
-            header = f"{'Model A':<20} {'Model B':<20} {'t-stat':<10} {'p-value':<10} {'Result':<15}"
-            report_lines.append(header)
-            report_lines.append("-" * 75)
-            
-            for i, m1 in enumerate(model_names):
-                for m2 in model_names[i+1:]:
-                    a = np.array(results_per_model[m1]['fold_accuracies'])
-                    b = np.array(results_per_model[m2]['fold_accuracies'])
-                    
-                    if len(a) == len(b) and len(a) > 1:
-                        t, p = ttest_rel(a, b)
-                        sig_marker = "***" if p < 0.01 else "**" if p < 0.05 else ""
-                        res = f"Significant{sig_marker}" if p < 0.05 else "Not significant"
-                        line = f"{m1:<20} {m2:<20} {t:<10.4f} {p:<10.6f} {res:<15}"
-                        report_lines.append(line)
-            
-            report_lines.append("-" * 75)
-            report_lines.append("Legend: *** p<0.01, ** p<0.05")
-            report_lines.append("")
-            report_lines.append("💡 INTERPRETATION:")
-            report_lines.append("  • Paired t-test compares average performance across folds")
-            report_lines.append("  • H0: Both models perform equally on average")
-            report_lines.append("  • If p<0.05: Significant performance difference")
-            report_lines.append("")
-            
-            # ==================== WILCOXON TEST ====================
-            report_lines.append("=" * 80)
-            report_lines.append("📊 WILCOXON TEST: ALL MODELS COMPARISON (ACCURACY)")
-            report_lines.append("=" * 80)
-            report_lines.append(f"Non-parametric comparison across {n_folds} folds")
-            report_lines.append("")
-            
-            header = f"{'Model A':<20} {'Model B':<20} {'Median A':<12} {'Median B':<12} {'W-stat':<10} {'p-value':<10} {'Result':<15}"
-            report_lines.append(header)
-            report_lines.append("-" * 85)
-            
-            for i, m1 in enumerate(model_names):
-                for m2 in model_names[i+1:]:
-                    a = np.array(results_per_model[m1]['fold_accuracies'])
-                    b = np.array(results_per_model[m2]['fold_accuracies'])
-                    
-                    if len(a) == len(b) and len(a) > 0:
-                        try:
-                            w, p = wilcoxon(a, b)
-                            median_a = np.median(a)
-                            median_b = np.median(b)
-                            sig_marker = "***" if p < 0.01 else "**" if p < 0.05 else ""
-                            res = f"Significant{sig_marker}" if p < 0.05 else "Not significant"
-                            line = f"{m1:<20} {m2:<20} {median_a:<12.4f} {median_b:<12.4f} {w:<10.4f} {p:<10.6f} {res:<15}"
-                            report_lines.append(line)
-                        except Exception as e:
-                            line = f"{m1:<20} {m2:<20} Wilcoxon failed ({str(e)[:30]})"
-                            report_lines.append(line)
-            
-            report_lines.append("-" * 85)
-            report_lines.append("💡 INTERPRETATION:")
-            report_lines.append("  • Non-parametric alternative to paired t-test")
-            report_lines.append("  • More robust to outliers and non-normal distributions")
-            report_lines.append("")
-            
-            # ==================== ANOVA ====================
-            report_lines.append("=" * 80)
-            report_lines.append("📉 ONE-WAY ANOVA: ALL MODELS COMPARISON (ACCURACY)")
-            report_lines.append("=" * 80)
-            report_lines.append(f"Testing if performance differs among all {len(model_names)} models")
-            report_lines.append("")
-            
-            all_data = [np.array(results_per_model[m]['fold_accuracies'])
-                    for m in model_names if len(results_per_model[m]['fold_accuracies']) > 0]
-            
-            if len(all_data) > 1:
-                f_stat, p = f_oneway(*all_data)
-                
-                report_lines.append(f"F-statistic: {f_stat:.4f}")
-                report_lines.append(f"p-value: {p:.6f}")
-                
-                sig_marker = "***" if p < 0.01 else "**" if p < 0.05 else ""
-                significant = f"Yes{sig_marker}" if p < 0.05 else "No"
-                report_lines.append(f"Significant difference (α=0.05): {significant}")
-                report_lines.append("")
-                report_lines.append("💡 INTERPRETATION:")
-                report_lines.append("  • H0: All models perform equally well on average")
-                report_lines.append("  • H1: At least one model performs significantly differently")
-                report_lines.append("  • If p < 0.05: Reject H0 (significant differences exist)")
-                report_lines.append("")
-            
-            # ==================== COHEN'S D ====================
-            report_lines.append("=" * 80)
-            report_lines.append("📏 EFFECT SIZES: COHEN'S D (Pairwise Comparisons)")
+            report_lines.append("📋 TEST SUMMARY & RECOMMENDATIONS")
             report_lines.append("=" * 80)
             report_lines.append("")
             
-            header = f"{'Model A':<20} {'Model B':<20} {'Cohens d':<12} {'|Effect|':<12} {'Interpretation':<25}"
-            report_lines.append(header)
-            report_lines.append("-" * 95)
+            summary_lines = [
+                f"{'Test':<20} {'Purpose':<45} {'Result':<20}",
+                "-" * 85,
+                f"{'Friedman':<20} {'Overall difference among models':<45} {result:<20}",
+            ]
             
-            for i, m1 in enumerate(model_names):
-                for m2 in model_names[i+1:]:
-                    a = np.array(results_per_model[m1]['fold_accuracies'])
-                    b = np.array(results_per_model[m2]['fold_accuracies'])
-                    
-                    if len(a) == len(b) and len(a) > 1:
-                        mean_a, mean_b = a.mean(), b.mean()
-                        std_a, std_b = a.std(ddof=1), b.std(ddof=1)
-                        pooled_std = np.sqrt(
-                            ((len(a)-1)*std_a**2 + (len(b)-1)*std_b**2) / (len(a)+len(b)-2)
-                        )
-                        d = (mean_a - mean_b) / pooled_std if pooled_std > 0 else 0
-                        
-                        abs_d = abs(d)
-                        if abs_d < 0.2:
-                            effect = "Negligible"
-                        elif abs_d < 0.5:
-                            effect = "Small"
-                        elif abs_d < 0.8:
-                            effect = "Medium"
-                        else:
-                            effect = "Large"
-                        
-                        direction = "A better" if d > 0 else "B better" if d < 0 else "Equal"
-                        
-                        line = f"{m1:<20} {m2:<20} {d:<12.4f} {abs_d:<12.4f} {effect} ({direction})"
-                        report_lines.append(line)
+            if p < 0.05:
+                count_sig = len(significant_pairs) if 'significant_pairs' in locals() else 0
+                summary_lines.append(
+                    f"{'Nemenyi post-hoc':<20} {'Which pairs differ':<45} {count_sig} significant pairs"
+                )
+            else:
+                summary_lines.append(
+                    f"{'Nemenyi post-hoc':<20} {'Which pairs differ':<45} {'Not performed':<20}"
+                )
             
-            report_lines.append("-" * 95)
-            report_lines.append("💡 COHEN'S D INTERPRETATION:")
-            report_lines.append("  • 0.0 - 0.2: Negligible effect")
-            report_lines.append("  • 0.2 - 0.5: Small effect")
-            report_lines.append("  • 0.5 - 0.8: Medium effect")
-            report_lines.append("  • 0.8+:      Large effect")
+            report_lines.extend(summary_lines)
+            report_lines.append("")
+            report_lines.append("💡 Practical Interpretation:")
+            report_lines.append("  • Friedman → global ranking testi (tüm modeller aynı anda)")
+            report_lines.append("  • Nemenyi → hangi modellerin birbirinden gerçekten farklı olduğunu söyler")
+            report_lines.append("  • Eğer Nemenyi'de anlamlı çift yoksa → modeller pratikte çok yakın performans gösteriyor")
             report_lines.append("")
             
-            # ==================== SUMMARY ====================
-            report_lines.append("=" * 80)
-            report_lines.append("📋 TEST SUMMARY")
-            report_lines.append("=" * 80)
-            report_lines.append("")
+            # ────────────────────────────────────────────────
+            # Raporu kaydet & yazdır
+            # ────────────────────────────────────────────────
+            report_text = "\n".join(report_lines)
+            stat_path = "Friedman_Nemenyi_Statistical_Report.txt"
             
-            summary_header = f"{'Test':<20} {'Purpose':<40} {'Models Tested':<15}"
-            report_lines.append(summary_header)
-            report_lines.append("-" * 75)
-            report_lines.append(f"{'McNemar':<20} {'Error pattern differences':<40} {'All pairs':<15}")
-            report_lines.append(f"{'Paired t-test':<20} {'Mean accuracy differences':<40} {'All pairs':<15}")
-            report_lines.append(f"{'Wilcoxon':<20} {'Non-parametric comparison':<40} {'All pairs':<15}")
-            report_lines.append(f"{'One-way ANOVA':<20} {'All models vs each other':<40} {'All models':<15}")
-            report_lines.append(f"{'Cohens d':<20} {'Effect size magnitude':<40} {'All pairs':<15}")
-            report_lines.append("")
-            
-            report_lines.append("=" * 80)
-            report_lines.append("✅ Statistical Analysis Complete")
-            report_lines.append("=" * 80)
-            
-            # Save report
-            stat_path = "Statistical_Significance_Report.txt"
             with open(stat_path, "w", encoding="utf-8") as f:
-                f.write("\n".join(report_lines))
-            print(f"[OK] Statistical report saved: {stat_path}")
+                f.write(report_text)
             
-            # Print to console
-            print("\n".join(report_lines))
+            print(f"[OK] Friedman + Nemenyi statistical report saved: {stat_path}")
+            print("\n" + report_text)
             
-            # Eğer safe_copy_to_drive method'u varsa
+            # Eğer sınıfında safe_copy_to_drive varsa
             if hasattr(self, 'safe_copy_to_drive'):
                 self.safe_copy_to_drive(stat_path, stat_path)
-            
+                
+        except ImportError as ie:
+            print(f"[ERROR] Missing library: {ie}")
+            print("  → Make sure 'scikit-posthocs' is installed: pip install scikit-posthocs")
         except Exception as e:
             print(f"[ERROR] Statistical analysis failed: {e}")
             import traceback

@@ -159,13 +159,16 @@ Two strategies are automatically attempted:
 2. **Oversampling**: RandomOverSampler as fallback
 
 ## Statistical Analysis
-
 Automatic statistical significance testing includes:
 
-- Paired t-test (parametric)
-- Wilcoxon signed-rank test (non-parametric)
-- ANOVA (multiple model comparison)
-- Cohen's d (effect size)
+- **Friedman test** (non-parametric alternative to repeated-measures ANOVA)  
+  → Tests whether there is a statistically significant difference among the models across the cross-validation folds
+
+- **Nemenyi post-hoc test** (when Friedman p < 0.05)  
+  → Performs pairwise comparisons to identify which specific models differ significantly from each other
+
+- **Mean accuracy ranking** and descriptive statistics per model
+
 
 ## Performance Optimization
 
