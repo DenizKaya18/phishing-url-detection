@@ -156,9 +156,9 @@ Running the Full Pipeline
 
 To run the complete pipeline (Preprocessing → Cross-Validation → Final Training → Evaluation) with GPU optimization:
 
-	```bash
-    python -m src.main
-    ```
+```bash
+python -m src.main
+```
 
 
 ### Programmatic Usage
