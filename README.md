@@ -129,8 +129,8 @@ A robust, production-ready ensemble deep learning framework for detecting phishi
 
 1.  **Clone the repository:**
     ```bash
-    git clone [https://github.com/DenizKaya18/phishing-url-detection.git](https://github.com/DenizKaya18/phishing-url-detection.git)
-    cd url-phishing-detection
+    git clone https://github.com/DenizKaya18/phishing-url-detection.git
+	cd url-phishing-detection
     ```
 
 2.  **Create and activate a virtual environment (Optional but recommended):**
@@ -156,47 +156,61 @@ Running the Full Pipeline
 
 To run the complete pipeline (Preprocessing → Cross-Validation → Final Training → Evaluation) with GPU optimization:
 
-python -m src.main
+	```bash
+    python -m src.main
+    ```
+
 
 ### Programmatic Usage
 
 You can import modules to run specific parts of the pipeline manually:
 
 ```
-from src.preprocessing import prepare_data_from_raw
-from src.ensemble_classifier import OptimizedEnsembleURLClassifierCV
+import os
+from src.config import DATA_PATH, CHECKPOINT_DIR, EPOCHS, BATCH_SIZE
+from src.classifier import OptimizedEnsembleURLClassifierCV
+from src.models import CheckpointManager, extend_classifier_functionality
 
-# 1. Load and Prepare Data
-# Note: prepare_data_from_raw returns 8 values
-(X_url_train, y_train, X_url_test, y_test, rows_all, 
- tokenizer, max_len, vocab_size) = prepare_data_from_raw("data/dataset.txt", test_size=0.2)
+# 0. Inject saving utility to the class (Runtime Extension)
+extend_classifier_functionality()
 
-# Create row tuples required for feature extraction
-rows_train = [(X_url_train[i], y_train[i]) for i in range(len(X_url_train))]
-rows_test = [(X_url_test[i], y_test[i]) for i in range(len(X_url_test))]
-
-# 2. Initialize Ensemble
+# 1. Initialize Classifier & Checkpoint Manager
 classifier = OptimizedEnsembleURLClassifierCV(
     n_models=4,
-    n_folds=10,
-    random_seeds=[42, 123, 456, 789]
+    n_folds=10
 )
+checkpoint_mgr = CheckpointManager(checkpoint_dir=CHECKPOINT_DIR)
 
-# 3. Cross-Validation
-# Supports checkpointing and detailed metrics
+# 2. Load and Prepare Data
+# Automatically fits tokenizer and determines max_len
+X_url_train, y_train, X_url_test, y_test = classifier.prepare_data_from_raw(DATA_PATH)
+
+# 3. Phase 1: Cross-Validation
+# Uses local 'cv_checkpoints/' to resume if interrupted
 classifier.cross_validate_ensemble(
-    X_url_train, y_train, rows_train,
-    epochs=15,
-    batch_size=512
+    X_url_train, 
+    y_train, 
+    checkpoint_mgr=checkpoint_mgr,
+    epochs=EPOCHS,
+    batch_size=BATCH_SIZE
 )
 
-# 4. Final Training on Training Split
+# 4. Phase 2: Final Ensemble Training
+# Trains final models on the full training split
 classifier.train_final_ensemble(
-    X_url_train, y_train, rows_train,
-    X_url_test, y_test, rows_test,
-    epochs=15,
-    batch_size=512
+    X_url_train, y_train, 
+    X_url_test, y_test,
+    epochs=EPOCHS,
+    batch_size=BATCH_SIZE
 )
+
+# 5. Phase 3: Evaluation & Detailed Reports
+results, best_method = classifier.evaluate_final_ensemble(X_url_test, y_test)
+classifier.print_comprehensive_summary(results, best_method)
+classifier.print_cv_comparison(results, best_method)
+
+# 6. Save Deployment Package
+classifier.save_model_ensemble(save_path="models/ensemble_final")
 
 ```
 
