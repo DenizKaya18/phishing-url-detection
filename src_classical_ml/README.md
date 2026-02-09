@@ -44,7 +44,7 @@ pip install -r requirements_classical_ml.txt
 Or install manually:
 ```bash
 pip install numpy pandas scikit-learn imbalanced-learn seaborn matplotlib scipy tqdm joblib
-pip install tldextract wordsegment  # Optional but recommended
+pip install tldextract wordsegment  
 ```
 
 ## Usage
