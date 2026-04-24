@@ -230,7 +230,7 @@ classifier.save_model_ensemble(save_path="models/ensemble_final")
 
 ### Datasets
 
-This study evaluates models across three distinct phishing URL datasets to ensure robust cross-dataset generalization:
+This study evaluates models across three distinct phishing URL datasets:
 
 **D1: Mendeley Data (V1)**
 - Source: https://data.mendeley.com/datasets/vfszbj9b36/1
@@ -241,7 +241,6 @@ This study evaluates models across three distinct phishing URL datasets to ensur
 
 **D3: 1M-PD (2018)**
 - Source: https://github.com/huapingz/ChracterEmbedding/tree/master
-- Distribution: 584,909 legitimate | 587,688 phishing
 
 Encoded labels across all datasets:
 
