@@ -228,15 +228,22 @@ classifier.save_model_ensemble(save_path="models/ensemble_final")
 
  
 
-### Dataset
+### Datasets
 
-This study uses a publicly available phishing URL dataset from Mendeley Data:
+This study evaluates models across three distinct phishing URL datasets to ensure robust cross-dataset generalization:
 
-Source: https://data.mendeley.com/datasets/vfszbj9b36/1
+**D1: Mendeley Data (V1)**
+- Source: https://data.mendeley.com/datasets/vfszbj9b36/1
+- Original labels: legitimate, phishing
 
-Original labels: legitimate, phishing
+**D2: StealthPhisher (2025)**
+- Source: https://data.mendeley.com/datasets/m2479kmybx/1
 
-Encoded labels:
+**D3: 1M-PD (2018)**
+- Source: https://github.com/huapingz/ChracterEmbedding/tree/master
+- Distribution: 584,909 legitimate | 587,688 phishing
+
+Encoded labels across all datasets:
 
 0 → legitimate
 
