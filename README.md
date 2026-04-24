@@ -104,9 +104,11 @@ A robust, production-ready ensemble deep learning framework for detecting phishi
 
 - Stratified K-fold cross-validation (default: 10-fold)
 
+- Holdout Validation (80/20 train/test split) with dedicated Ablation Studies
+
 - Accuracy, Precision, Recall, F1-score, AUC-ROC
 
-- Statistical significance testing (McNemar, t-test, Wilcoxon)
+- Statistical significance testing (McNemar, t-test, Wilcoxon, Friedman, Nemenyi)
 
 - Research-Oriented Design
 
@@ -148,6 +150,15 @@ A robust, production-ready ensemble deep learning framework for detecting phishi
     ```bash
     pip install -r requirements.txt
     ```
+
+### ☁️ Colab Setup
+
+If you prefer to run the experiments in Google Colab, we have provided standalone scripts in the `colab_scripts/` directory:
+
+1. Upload the `colab_scripts/` folder to your Google Drive.
+2. Open `Classical_ML.py` or `DeepLearning.py` in Colab.
+3. Run the respective requirements script (`ClasicalRequirements.py` or `DeepRequirements.py`) in a Colab cell to install necessary dependencies.
+4. Mount your Google Drive and adjust the data paths to point to the uploaded dataset.
 
 
 ## ⚡ Quick Start

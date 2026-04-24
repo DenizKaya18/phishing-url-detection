@@ -36,9 +36,10 @@ class Config:
         os.environ["OPENBLAS_NUM_THREADS"] = str(self.n_jobs)
         os.environ["MKL_NUM_THREADS"] = str(self.n_jobs)
         
-        # Cross-validation settings
+        # Cross-validation and Holdout settings
         self.n_splits = 10
         self.random_state = 42
+        self.test_size = 0.2
         
         # Feature extraction settings
         self.feature_threshold = 20

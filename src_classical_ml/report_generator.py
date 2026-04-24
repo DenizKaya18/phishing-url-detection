@@ -318,3 +318,118 @@ class ReportGenerator:
             print(f"[ERROR] Statistical analysis failed: {e}")
             import traceback
             traceback.print_exc()
+
+    def generate_holdout_reports(self, holdout_results, holdout_predictions, ablation_data, holdout_indices, labels):
+        """Generate reports specifically for the holdout evaluation"""
+        print("\n" + "="*80)
+        print("=== GENERATING HOLDOUT REPORTS ===")
+        print("="*80)
+        
+        # 1. Final Holdout Results
+        df_holdout = pd.DataFrame(holdout_results)
+        if not df_holdout.empty:
+            self.save_report(df_holdout, "Final_Holdout_Test_Results.csv")
+            
+            # Confusion Matrices for Holdout
+            for rec in holdout_results:
+                model_name = rec['Model']
+                try:
+                    tn, fp, fn, tp = rec['TN'], rec['FP'], rec['FN'], rec['TP']
+                    cm_arr = np.array([[tn, fp], [fn, tp]])
+                    
+                    plt.figure(figsize=(5, 4))
+                    sns.heatmap(
+                        cm_arr, annot=True, fmt=".0f", cbar=False,
+                        xticklabels=['Pred: Normal', 'Pred: Phishing'],
+                        yticklabels=['True: Normal', 'True: Phishing']
+                    )
+                    plt.title(f"Holdout CM - {model_name}")
+                    plt.ylabel("True")
+                    plt.xlabel("Pred")
+                    plt.tight_layout()
+                    
+                    img_name = f"CM_Holdout_{model_name.replace(' ', '_')}.png"
+                    plt.savefig(img_name, dpi=300)
+                    plt.close()
+                    self.safe_copy_to_drive(img_name, img_name)
+                except Exception as e:
+                    print(f"[ERROR] Failed to generate Holdout CM for {model_name}: {e}")
+                    
+        # 2. Holdout Ablation Study
+        df_ablation = pd.DataFrame(ablation_data)
+        if not df_ablation.empty:
+            # Calculate accuracy drop from baseline
+            baseline_accs = df_ablation[df_ablation['Scenario'] == 'BASELINE'].set_index('Model')['Accuracy']
+            df_ablation['Accuracy_Drop'] = df_ablation.apply(
+                lambda row: round(baseline_accs.get(row['Model'], row['Accuracy']) - row['Accuracy'], 6), axis=1
+            )
+            self.save_report(df_ablation, "Holdout_Ablation_Study.csv")
+            
+            # Summary
+            abl_summary = df_ablation.groupby(['Scenario', 'Model'])[[
+                'Accuracy','Precision','Recall','F1_Score','Sensitivity','Specificity',
+                'FNR','FPR','Accuracy_Drop'
+            ]].mean().round(6).reset_index()
+            self.save_report(abl_summary, "Holdout_Ablation_Summary.csv")
+            
+            # Bar plot
+            try:
+                fig, ax = plt.subplots(figsize=(12, 6))
+                df_bar = df_ablation.groupby(['Scenario', 'Model'])['Accuracy'].mean().unstack()
+                df_bar.plot(kind='bar', ax=ax)
+                ax.set_title("Holdout Ablation Study - Accuracy per Scenario & Model")
+                ax.set_ylabel("Accuracy")
+                ax.set_xlabel("Scenario")
+                ax.legend(title="Model", bbox_to_anchor=(1.05, 1), loc='upper left')
+                plt.xticks(rotation=30, ha='right')
+                plt.tight_layout()
+                abl_fig = "Holdout_Ablation_BarPlot.png"
+                plt.savefig(abl_fig, dpi=300)
+                plt.close()
+                self.safe_copy_to_drive(abl_fig, abl_fig)
+            except Exception as e:
+                print(f"[ERROR] Holdout ablation bar plot failed: {e}")
+                
+        # 3. Holdout Statistical Analysis (McNemar-like)
+        self._generate_holdout_statistical_report(holdout_predictions, holdout_indices, labels)
+        
+    def _generate_holdout_statistical_report(self, holdout_predictions, holdout_indices, labels):
+        try:
+            import scipy.stats as sp_stats
+            
+            model_names = list(holdout_predictions.keys())
+            y_test_holdout = labels[holdout_indices]
+            stat_lines = []
+            
+            stat_lines.append("="*80)
+            stat_lines.append("HOLDOUT STATISTICAL ANALYSIS REPORT (McNemar-style)")
+            stat_lines.append("="*80)
+            
+            for i, m1 in enumerate(model_names):
+                for m2 in model_names[i+1:]:
+                    correct_m1 = (holdout_predictions[m1] == y_test_holdout).astype(int)
+                    correct_m2 = (holdout_predictions[m2] == y_test_holdout).astype(int)
+                    
+                    b = np.sum((correct_m1 == 1) & (correct_m2 == 0))
+                    c = np.sum((correct_m1 == 0) & (correct_m2 == 1))
+                    
+                    n_discordant = b + c
+                    if n_discordant > 0:
+                        chi2 = (abs(b - c) - 1)**2 / (b + c)
+                        p_mcnemar = 1 - sp_stats.chi2.cdf(chi2, df=1)
+                        sig = "Significant" if p_mcnemar < 0.05 else "Not significant"
+                        stat_lines.append(f"{m1} vs {m2}: b={b}, c={c}, chi2={chi2:.4f}, p={p_mcnemar:.6f} ({sig})")
+                    else:
+                        stat_lines.append(f"{m1} vs {m2}: identical predictions (no discordant pairs)")
+                        
+            report_text = "\n".join(stat_lines)
+            stat_path = "Holdout_Statistical_Significance_Report.txt"
+            
+            with open(stat_path, "w", encoding="utf-8") as f:
+                f.write(report_text)
+            
+            print(f"[OK] Holdout statistical report saved: {stat_path}")
+            self.safe_copy_to_drive(stat_path, stat_path)
+            
+        except Exception as e:
+            print(f"[ERROR] Holdout statistical analysis failed: {e}")

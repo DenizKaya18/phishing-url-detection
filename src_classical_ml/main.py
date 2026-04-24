@@ -12,6 +12,8 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
+from sklearn.model_selection import train_test_split
+
 from config import Config
 from data_loader import DataLoader
 from preprocessor import URLPreprocessor
@@ -61,17 +63,50 @@ def main():
     models = ModelFactory.get_models()
     print(f"\n[INFO] Models to train: {list(models.keys())}")
     
-    # 7. Train models with cross-validation
-    trainer = ModelTrainer(config, feature_builder, models)
-    results = trainer.run_cross_validation(
+    # 7. Split Data (Holdout)
+    print("\n" + "="*80)
+    print("=== HOLDOUT SPLIT ===")
+    print("="*80)
+    train_indices, holdout_indices = train_test_split(
         valid_indices,
-        valid_labels,
-        valid_labels
+        test_size=config.test_size,
+        stratify=valid_labels,
+        random_state=config.random_state
     )
     
-    # 8. Generate reports
+    print(f"Train size : {len(train_indices)}")
+    print(f"Test size  : {len(holdout_indices)}")
+    import numpy as np
+    # To get distribution, we map train_indices back to valid_labels index
+    # valid_indices is an array-like of the original indices.
+    # We need the labels corresponding to train_indices and holdout_indices
+    # Actually train_test_split on indices directly needs us to map them to labels.
+    # We should split on valid_indices, and we can stratify by valid_labels.
+    # We will need the corresponding labels for bincount.
+    train_labels = [labels[i] for i in train_indices]
+    holdout_labels = [labels[i] for i in holdout_indices]
+    print(f"Train dist : {np.bincount(train_labels)}")
+    print(f"Test dist  : {np.bincount(holdout_labels)}")
+    
+    # 8. Train models with cross-validation
+    trainer = ModelTrainer(config, feature_builder, models)
+    cv_results = trainer.run_cross_validation(
+        train_indices,
+        labels,
+        labels
+    )
+    
+    # 9. Final Holdout Evaluation
+    holdout_results, holdout_predictions, ablation_data = trainer.run_holdout_evaluation(
+        train_indices,
+        holdout_indices,
+        labels
+    )
+    
+    # 10. Generate reports
     report_gen = ReportGenerator(config)
-    report_gen.generate_reports(results)
+    report_gen.generate_reports(cv_results)
+    report_gen.generate_holdout_reports(holdout_results, holdout_predictions, ablation_data, holdout_indices, labels)
     
     print("\n" + "="*80)
     print("=== PIPELINE COMPLETED SUCCESSFULLY ===")

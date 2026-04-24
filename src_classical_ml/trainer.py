@@ -191,3 +191,115 @@ class ModelTrainer:
                 print(f"[CHECKPOINT] Error finalizing fold {fold}: {e}")
         
         return self.full_report_data
+        
+    def run_holdout_evaluation(self, train_indices, holdout_indices, labels):
+        """Run final evaluation on holdout set and ablation study"""
+        print("\n" + "="*80)
+        print("=== FINAL HOLDOUT EVALUATION ===")
+        print("="*80)
+        
+        # Build features for final train and holdout sets
+        self.feature_builder.store.clear()
+        self.feature_builder.build_counters_from_train(
+            train_indices, labels, threshold=self.config.feature_threshold
+        )
+        
+        print("Building X_train_final...")
+        X_train_final = self.feature_builder.build_features(train_indices)
+        print("Building X_test_holdout...")
+        X_test_holdout = self.feature_builder.build_features(holdout_indices)
+        
+        y_train_final = labels[train_indices]
+        y_test_holdout = labels[holdout_indices]
+        
+        print(f"Final train shape: {X_train_final.shape}")
+        print(f"Holdout test shape: {X_test_holdout.shape}")
+        
+        # Final Model Training and Evaluation (Baseline)
+        final_results = []
+        holdout_predictions = {}
+        
+        for model_name, model in self.models.items():
+            print(f"\nTraining final model: {model_name}")
+            clf = clone(model)
+            clf, fit_mode = self.train_model(clf, X_train_final, y_train_final)
+            
+            # Predict
+            y_pred = self.evaluator.predict_with_progress(clf, X_test_holdout, model_name=model_name)
+            holdout_predictions[model_name] = y_pred
+            
+            # Calculate metrics
+            metrics = self.evaluator.calculate_metrics(y_test_holdout, y_pred)
+            print(f"{model_name} HOLDOUT -> Accuracy: {metrics['accuracy']:.4f} | F1: {metrics['f1_score']:.4f}")
+            
+            final_results.append({
+                "Model": model_name,
+                "Accuracy": round(metrics['accuracy'], 6),
+                "Precision": round(metrics['precision'], 6),
+                "Recall": round(metrics['recall'], 6),
+                "F1": round(metrics['f1_score'], 6),
+                "Sensitivity": round(metrics['sensitivity'], 6),
+                "Specificity": round(metrics['specificity'], 6),
+                "FNR": round(metrics['fnr'], 6),
+                "FPR": round(metrics['fpr'], 6),
+                "TN": metrics['TN'],
+                "FP": metrics['FP'],
+                "FN": metrics['FN'],
+                "TP": metrics['TP'],
+                "Fit_Mode": fit_mode
+            })
+            
+        # Holdout Ablation Study
+        print("\n" + "="*80)
+        print("=== HOLDOUT ABLATION STUDY ===")
+        print("="*80)
+        
+        scenarios = {
+            'BASELINE': [],
+            'REMOVE_BoW': [14],
+            'REMOVE_SegBoW': [15],
+            'REMOVE_NGRAMS_3_4': [16,17],
+            'REMOVE_TLD': [3],
+            'REMOVE_RATIOS': [2,18,19]
+        }
+        
+        def drop_columns_safe(X, cols_to_drop):
+            if X is None or X.size == 0 or not cols_to_drop:
+                return X
+            valid = [c for c in cols_to_drop if 0 <= c < X.shape[1]]
+            return np.delete(X, valid, axis=1) if valid else X
+            
+        holdout_ablation_data = []
+        
+        for scen_name, remove_cols in scenarios.items():
+            print(f"\n[ABL] Scenario: {scen_name}")
+            X_train_scen = drop_columns_safe(X_train_final.copy(), remove_cols)
+            X_test_scen  = drop_columns_safe(X_test_holdout.copy(), remove_cols)
+            
+            for model_name, model in self.models.items():
+                clf = clone(model)
+                t0 = time.time()
+                clf, fit_mode = self.train_model(clf, X_train_scen, y_train_final)
+                train_time = time.time() - t0
+                
+                y_pred = self.evaluator.predict_with_progress(clf, X_test_scen, model_name=model_name)
+                m = self.evaluator.calculate_metrics(y_test_holdout, y_pred)
+                
+                holdout_ablation_data.append({
+                    'Scenario': scen_name,
+                    'Model': model_name,
+                    'Accuracy': round(m['accuracy'], 6),
+                    'Precision': round(m['precision'], 6),
+                    'Recall': round(m['recall'], 6),
+                    'F1_Score': round(m['f1_score'], 6),
+                    'Sensitivity': round(m['sensitivity'], 6),
+                    'Specificity': round(m['specificity'], 6),
+                    'FNR': round(m['fnr'], 6),
+                    'FPR': round(m['fpr'], 6),
+                    'TN': m['TN'], 'FP': m['FP'], 'FN': m['FN'], 'TP': m['TP'],
+                    'Train_Time_Sec': round(train_time, 4),
+                    'Fit_Mode': fit_mode
+                })
+                print(f"   ✓ {model_name}: Acc={m['accuracy']:.4f}, F1={m['f1_score']:.4f}")
+                
+        return final_results, holdout_predictions, holdout_ablation_data
