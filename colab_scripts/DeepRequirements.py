@@ -1,27 +1,19 @@
-# ===== COLAB'DA İLK HÜCREYE EKLE - TÜM KÜTÜPHANELERI YÜK =====
-
-# Bu hücreyi Colab'da çalıştır (ilk şey olarak)
-# Run'a tıkla (▶️) ve bitmesini bekle
- 
-print("📦 TÜM KÜTÜPHANELER YÜKLENİYOR...\n")
-
-# pip güncelleştir
 import subprocess
 import sys
 
 def install_package(package_name, pip_name=None):
-    """Kütüphane yükle"""
+    """Install library"""
     if pip_name is None:
         pip_name = package_name
 
-    print(f"⬇️ {pip_name} yükleniyor...")
+    print(f"⬇️ Installing {pip_name}...")
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", pip_name])
-    print(f"✓ {pip_name} yüklendi\n")
+    print(f"✓ {pip_name} installed\n")
 
-# 1. TensorFlow (GPU ile)
-print("1️⃣  TensorFlow yükleniyor (GPU destekli)...")
+# 1. TensorFlow (with GPU)
+print("1️⃣  Installing TensorFlow (with GPU support)...")
 subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "tensorflow[and-cuda]"])
-print("✓ TensorFlow yüklendi\n")
+print("✓ TensorFlow installed\n")
 
 # 2. Data Processing
 install_package("pandas", "pandas")
@@ -30,73 +22,73 @@ install_package("numpy", "numpy")
 # 3. Scikit-learn
 install_package("scikit-learn", "scikit-learn")
 
-# 4. wordsegment (URL'deki sözcükleri parçalamak için)
+# 4. wordsegment (for splitting words in URLs)
 install_package("wordsegment", "wordsegment")
 
-# 5. tldextract (TLD'yi ayıklamak için - Alan adı bilgisi)
+# 5. tldextract (for extracting TLD - domain information)
 install_package("tldextract", "tldextract")
 
-# 6. Görselleştirme
+# 6. Visualization
 install_package("matplotlib", "matplotlib")
 install_package("seaborn", "seaborn")
 
-# 7. İsteğe bağlı ama önerilir
-install_package("psutil", "psutil")  # Bellek izleme için
+# 7. Optional but recommended
+install_package("psutil", "psutil")  # For memory monitoring
 
 print("\n" + "="*50)
-print("✅ TÜM KÜTÜPHANELER YÜKLENDİ!")
+print("✅ ALL LIBRARIES INSTALLED!")
 print("="*50)
 
-# Kontrol et
-print("\n🔍 Kütüphaneleri kontrol ediyor...")
+# Check installations
+print("\n🔍 Checking libraries...")
 try:
     import tensorflow as tf
     print(f"✓ TensorFlow: {tf.__version__}")
 except:
-    print("❌ TensorFlow yüklenemedi")
+    print("❌ TensorFlow installation failed")
 
 try:
     import pandas as pd
     print(f"✓ Pandas: {pd.__version__}")
 except:
-    print("❌ Pandas yüklenemedi")
+    print("❌ Pandas installation failed")
 
 try:
     import numpy as np
     print(f"✓ NumPy: {np.__version__}")
 except:
-    print("❌ NumPy yüklenemedi")
+    print("❌ NumPy installation failed")
 
 try:
     from sklearn import __version__ as sklearn_version
     print(f"✓ Scikit-learn: {sklearn_version}")
 except:
-    print("❌ Scikit-learn yüklenemedi")
+    print("❌ Scikit-learn installation failed")
 
 try:
     from wordsegment import load
-    print(f"✓ wordsegment: yüklü")
+    print(f"✓ wordsegment: installed")
 except:
-    print("❌ wordsegment yüklenemedi")
+    print("❌ wordsegment installation failed")
 
 try:
     import tldextract
-    print(f"✓ tldextract: yüklü")
+    print(f"✓ tldextract: installed")
 except:
-    print("❌ tldextract yüklenemedi")
+    print("❌ tldextract installation failed")
 
 try:
     import matplotlib
     print(f"✓ matplotlib: {matplotlib.__version__}")
 except:
-    print("❌ matplotlib yüklenemedi")
+    print("❌ matplotlib installation failed")
 
 try:
     import seaborn
     print(f"✓ seaborn: {seaborn.__version__}")
 except:
-    print("❌ seaborn yüklenemedi")
+    print("❌ seaborn installation failed")
 
 print("\n" + "="*50)
-print("✅ HAZIR OLABILIRSIN!")
+print("✅ YOU ARE READY!")
 print("="*50)
