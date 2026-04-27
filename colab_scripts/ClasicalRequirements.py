@@ -1,4 +1,4 @@
-# Hücre 1: Kütüphaneleri Yükle ve GPU Kontrol Et
+# Check GPU and install lib
 !pip install scikit-learn imbalanced-learn pandas numpy scipy wordsegment tldextract -q
 
 import torch
