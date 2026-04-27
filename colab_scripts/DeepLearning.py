@@ -17,9 +17,9 @@ if gpus:
 
 policy = mixed_precision.Policy('mixed_float16')
 mixed_precision.set_global_policy(policy)
-print("✓ GPU Optimizasyonları Aktif")
+print("✓ GPU Optimizations Active")
 
-# ===== İMPORTLAR =====
+# ===== IMPORTS =====
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split, StratifiedKFold
@@ -72,18 +72,18 @@ CACHE_WORKERS = min(8, CPU_COUNT)
 FEATURE_WORKERS = min(CPU_COUNT, 10)
 EXTRACT_WORKERS = min(8, CPU_COUNT)
 
-print(f"\n✓ Sistem CPU Sayısı: {CPU_COUNT}")
-print(f"✓ Kullanılan Workers:")
+print(f"\n✓ System CPU Count: {CPU_COUNT}")
+print(f"✓ Used Workers:")
 print(f"  - Cache Workers: {CACHE_WORKERS}")
 print(f"  - Feature Workers: {FEATURE_WORKERS}")
 print(f"  - Extract Workers: {EXTRACT_WORKERS}\n")
 
-# ============ PROGRESS BAR RENKLERI ============
-COLOR_CACHE = 'green'      # Cache oluşturma rengi
-COLOR_FEATURE = 'yellow'   # Özellik oluşturma rengi
-COLOR_EXTRACT = 'cyan'     # Özellik çıkarma rengi
-COLOR_FOLD = 'magenta'     # Fold işlemi rengi
-print("✓ RAM Cache Sistemleri Başlatıldı")
+# ============ PROGRESS BAR COLORS ============
+COLOR_CACHE = 'green'      # Cache creation color
+COLOR_FEATURE = 'yellow'   # Feature creation color
+COLOR_EXTRACT = 'cyan'     # Feature extraction color
+COLOR_FOLD = 'magenta'     # Fold operation color
+print("✓ RAM Cache Systems Initialized")
 
 
 # ==================== VECTORIZED FEATURE EXTRACTOR ====================
@@ -3398,7 +3398,7 @@ def main():
         print(f"     ✓ Effect Sizes (Cohen's d): Completed (see detailed results above)")
 
     print("\n" + "="*80)
-    print("✅ PROGRAM BAŞARIYLA TAMAMLANDI")
+    print("✅ PROGRAM COMPLETED SUCCESSFULLY")
     print("="*80)
 
     return ensemble_clf, ensemble_results, best_method, analyzer, timing_stats, ablation_df
@@ -3411,10 +3411,10 @@ if __name__ == "__main__":
 
         print("\n✓ ALL ANALYSES COMPLETED SUCCESSFULLY")
     except KeyboardInterrupt:
-        print("\n\n⚠️ PROGRAM DURDURULDİ")
-        print("✓ Checkpoint kaydedildi")
-        print("✓ Sonraki çalıştırmada kaldığı yerden devam edecektir")
+        print("\n\n⚠️ PROGRAM INTERRUPTED")
+        print("✓ Checkpoint saved")
+        print("✓ Will continue from where it left off on next run")
     except Exception as e:
-        print(f"\n✗ PROGRAM HATASI: {e}")
+        print(f"\n✗ PROGRAM ERROR: {e}")
         import traceback
         traceback.print_exc()
