@@ -1,4 +1,3 @@
-# Düzeltilmiş CustomAblationStudy (yerine koyulacak tam sınıf)
 import numpy as np
 import pandas as pd
 import time
