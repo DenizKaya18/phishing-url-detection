@@ -24,10 +24,10 @@ from tqdm import tqdm
 import json
 
 # =============================================================================
-# 1. ADIM: GOOGLE DRIVE VE AYARLAR
+# STEP 1: GOOGLE DRIVE AND SETTINGS
 # =============================================================================
 print("="*80)
-print("=== GOOGLE DRIVE BAĞLANTISI VE AYARLAR ===")
+print("=== GOOGLE DRIVE CONNECTION AND SETTINGS ===")
 print("="*80)
 
 if not os.path.exists('/content/drive'):
@@ -35,12 +35,12 @@ if not os.path.exists('/content/drive'):
 
 drive_folder = "/content/drive/MyDrive/clasicraporIlkDataset"
 os.makedirs(drive_folder, exist_ok=True)
-print(f"[BİLGİ] Kayıt Klasörü: {drive_folder}\n")
+print(f"[INFO] Saving folder: {drive_folder}\n")
 
 sys.setrecursionlimit(21000)
 warnings.filterwarnings('ignore')
 
-# Kütüphane Kontrolleri
+# Library Checks
 try:
     import tldextract
 except ImportError:
@@ -52,7 +52,7 @@ try:
 except ImportError:
     def segment(text): return [text]
 
-# Güvenli / cached tldextract (eğer mevcutsa)
+# Safe / cached tldextract (if available)
 if tldextract:
     try:
         tld_extractor = tldextract.TLDExtract(cache_file=os.path.join(drive_folder, "tld_cache"), suffix_list_urls=None)
@@ -61,14 +61,14 @@ if tldextract:
 else:
     tld_extractor = None
 
-# Regex Derlemeleri (Hız için global)
+# Regex compilations (for speed, global)
 RE_WORD = re.compile(r'\w+')
 RE_IP = re.compile(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b')
 RE_SPECIAL = re.compile(r'[^\w\d\s]')
 
-# CPU Çekirdek Sayısı
+# CPU core count
 n_jobs = max(1, multiprocessing.cpu_count() - 1)
-print(f"[SİSTEM] Kullanılacak CPU Çekirdeği: {n_jobs}")
+print(f"[SYSTEM] CPU Cores to use: {n_jobs}")
 
 os.environ["OMP_NUM_THREADS"] = str(n_jobs)
 os.environ["OPENBLAS_NUM_THREADS"] = str(n_jobs)
@@ -79,7 +79,7 @@ joblib_backend = 'loky'
 joblib_verbose = 10
 
 # =============================================================================
-# 2. ADIM: VERİ YÜKLEME VE PARALEL ÖN İŞLEME (CACHE İLE)
+# STEP 2: DATA LOADING AND PARALLEL PREPROCESSING (WITH CACHE)
 # =============================================================================
 RAW_DATA_FILE = "Yeniyirmibin_dataset_V1.txt"
 rows = []
@@ -92,7 +92,7 @@ try:
             if len(parts) == 2:
                 rows.append((parts[0].strip(), parts[1].strip()))
 except FileNotFoundError:
-    print(f"HATA: {RAW_DATA_FILE} bulunamadı.")
+    print(f"ERROR: {RAW_DATA_FILE} not found.")
     sys.exit(1)
 
 n_samples_orig = len(rows)
@@ -100,7 +100,7 @@ print(f"Total samples (raw): {n_samples_orig}")
 y_all_orig = np.array([int(lbl) for _, lbl in rows])
 all_urls = [r[0] for r in rows]
 
-# *** DÜZELTİLDİ: V4 dataseti için ayrı cache dosyası ***
+# *** FIXED: Separate cache file for V4 dataset ***
 cache_path = os.path.join(drive_folder, "preprocessed_cache_v1.pkl")
 
 def fast_special_char_count(s):
@@ -165,9 +165,9 @@ if os.path.exists(cache_path):
     try:
         with open(cache_path, "rb") as f:
             preprocessed_data = pickle.load(f)
-        print(f"[CACHE] Preprocessed cache yüklendi. Süre: {time.time()-t0:.2f}s")
+        print(f"[CACHE] Preprocessed cache loaded. Time: {time.time()-t0:.2f}s")
     except Exception as e:
-        print(f"[CACHE] Yükleme hatası, yeniden preprocess yapılacak: {e}")
+        print(f"[CACHE] Loading error, re-preprocessing will be performed: {e}")
         try:
             os.remove(cache_path)
         except:
@@ -177,7 +177,7 @@ else:
     preprocessed_data = None
 
 if preprocessed_data is None:
-    print(f"-> {n_samples_orig} URL paralel olarak işleniyor (önbelleğe kaydedilecek)...")
+    print(f"-> Processing {n_samples_orig} URLs in parallel (will be cached)...")
     t_start_pre = time.time()
     batch_size = 5000
     preprocessed_data = []
@@ -1153,7 +1153,7 @@ else:
     ]
     valid_metrics = [c for c in metrics_agg if c in df_report.columns]
 
-    # *** DÜZELTİLDİ: num_cols scope sorunu giderildi ***
+    # *** FIXED: Variable scope issue resolved ***
     num_cols = []
 
     if valid_metrics:
@@ -1162,11 +1162,11 @@ else:
         ablation[num_cols] = ablation[num_cols].round(6)
         save_safe(ablation, "Ablation_Study_Summary.csv")
     else:
-        print("[UYARI] Ablation özeti oluşturulamadı — geçerli metric yok.")
+        print("[WARNING] Ablation summary could not be created — no valid metrics.")
 
     df_base = df_report[df_report['Scenario'] == 'BASELINE']
     if not df_base.empty:
-        # num_cols burada da güvenli şekilde kullanılıyor
+        # num_cols is used safely here too
         avg_base_cols = [c for c in valid_metrics if c in df_base.columns]
         avg_base = df_base.groupby('Model')[avg_base_cols].mean().reset_index()
         avg_base_num = avg_base.select_dtypes(include=[np.number]).columns.tolist()
@@ -1194,13 +1194,13 @@ else:
                         safe_copy_to_drive(iname, drive_folder, iname)
                     except: pass
                 except Exception as e:
-                    print(f"[HATA] CM oluşturulurken ({model_name}) hata: {e}")
+                    print(f"[ERROR] Error creating CM ({model_name}): {e}")
         else:
-            print("[UYARI] Confusion Matrix sütunları eksik, grafik çizilemedi.")
+            print("[WARNING] Confusion matrix columns missing, plot could not be drawn.")
     else:
-        print("[UYARI] Baseline (Scenario=='BASELINE') için veri yok; CM çizilmedi.")
+        print("[WARNING] Baseline (Scenario=='BASELINE') data not found; CM not drawn.")
 
-# --- CV İstatistiksel Analiz ---
+# --- CV Statistical Analysis ---
 try:
     df_base_stat = df_report[df_report['Scenario'] == 'BASELINE'] if not df_report.empty else pd.DataFrame()
     if not df_base_stat.empty:
@@ -1285,7 +1285,7 @@ try:
                         f.write("\n".join(self.report_lines))
                     print(f"[OK] Statistical report saved to: {filepath}")
                 except Exception as e:
-                    print(f"[HATA] Statistical report kaydedilemedi: {e}")
+                    print(f"[ERROR] Statistical report could not be saved: {e}")
 
         analyzer = StatisticalSignificanceAnalyzer_Fast(res_rec)
         analyzer.run_paired_ttest_all_vs_all()
@@ -1299,32 +1299,32 @@ try:
             if os.path.exists(drive_folder):
                 shutil.copy(stat_path, os.path.join(drive_folder, stat_path))
         except Exception as e:
-            print(f"[HATA] Stat rapor Drive'a kopyalanamadı: {e}")
+            print(f"[ERROR] Stat report could not be copied to Drive: {e}")
     else:
-        print("[UYARI] İstatistiksel analiz için baseline verisi bulunamadı.")
+        print("[WARNING] No baseline data found for statistical analysis.")
 except Exception as e:
-    print(f"[HATA] İstatistiksel analiz sırasında hata: {e}")
+    print(f"[ERROR] Error during statistical analysis: {e}")
 
-print(f"\n=== İŞLEM TAMAMLANDI. Dosyalar: {drive_folder} ===")
+print(f"\n=== PROCESS COMPLETED. Files: {drive_folder} ===")
 
 # =============================================================================
-# ÜRETILEN DOSYALAR ÖZETİ
+# GENERATED FILES SUMMARY
 # =============================================================================
 print("\n" + "="*80)
-print("ÜRETILEN DOSYALAR")
+print("GENERATED FILES")
 print("="*80)
 output_files = [
-    ("Detailed_Performance_Report_Per_Fold.csv",   "CV - Her fold/senaryo/model detay"),
-    ("Ablation_Study_Summary.csv",                 "CV - Senaryo ablation özeti"),
-    ("Baseline_Average_Performance.csv",           "CV - Baseline model ortalamaları"),
-    ("CM_Baseline_*.png",                          "CV - Model başına ortalama CM grafikleri"),
-    ("Statistical_Significance_Report.txt",        "CV - İstatistiksel testler"),
-    ("Final_Holdout_Test_Results.csv",             "Holdout - Tüm metrikler"),
-    ("CM_Holdout_*.png",                           "Holdout - Model başına CM grafikleri"),
-    ("Holdout_Ablation_Study.csv",                 "Holdout - Senaryo x model detay"),
-    ("Holdout_Ablation_Summary.csv",               "Holdout - Ablation özeti"),
-    ("Holdout_Ablation_BarPlot.png",               "Holdout - Ablation bar grafiği"),
-    ("Holdout_Statistical_Significance_Report.txt","Holdout - McNemar + CV testler"),
+    ("Detailed_Performance_Report_Per_Fold.csv",   "CV - Detail per fold/scenario/model"),
+    ("Ablation_Study_Summary.csv",                 "CV - Scenario ablation summary"),
+    ("Baseline_Average_Performance.csv",           "CV - Baseline model averages"),
+    ("CM_Baseline_*.png",                          "CV - Average CM plots per model"),
+    ("Statistical_Significance_Report.txt",        "CV - Statistical tests"),
+    ("Final_Holdout_Test_Results.csv",             "Holdout - All metrics"),
+    ("CM_Holdout_*.png",                           "Holdout - CM plots per model"),
+    ("Holdout_Ablation_Study.csv",                 "Holdout - Scenario x model detail"),
+    ("Holdout_Ablation_Summary.csv",               "Holdout - Ablation summary"),
+    ("Holdout_Ablation_BarPlot.png",               "Holdout - Ablation bar plot"),
+    ("Holdout_Statistical_Significance_Report.txt","Holdout - McNemar + CV tests"),
 ]
 for fname, desc in output_files:
     print(f"  {fname:<50} -> {desc}")
